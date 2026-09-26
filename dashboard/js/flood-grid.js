@@ -306,8 +306,7 @@
         const simRows = sim ? [
             ['Water accumulated', fmtVol(s.volume)],
             ['Depth mean / max', `${s.meanDepth.toFixed(2)} / ${s.maxDepth.toFixed(2)} m`],
-            ['Area under water', `${Math.round(s.wetFrac * 100)} %`],
-            ['People in water > 30 cm', fmt(s.atRisk)]
+            ['Area under water', `${Math.round(s.wetFrac * 100)} %`]
         ] : null;
         const dl = (rows) => `<dl class="readout">${rows.map(([k, v]) => `<dt>${k}</dt><dd class="mono">${v}</dd>`).join('')}</dl>`;
         const tLabel = sim ? `T+${String(Math.floor(s.t / 3600)).padStart(2, '0')}:${String(Math.floor(s.t % 3600 / 60)).padStart(2, '0')}` : '';
