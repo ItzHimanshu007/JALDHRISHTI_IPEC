@@ -243,11 +243,12 @@
         const t = state.terrain;
         const d = excessDepth(f);
         // area and people inside the village boundary
-        let wet = 0, exposed = 0, lifeRisk = 0, maxIn = 0;
+        let wet = 0, exposed = 0, lifeRisk = 0, maxIn = 0, floodMm = 0;
         const mask = t.mask, cp = state.cellPop;
         for (let i = 0; i < d.length; i++) {
             if (!mask[i]) continue;
             const di = d[i];
+            floodMm += di;
             if (di > WET_M * 1000) wet++;
             if (di > maxIn) maxIn = di;
             if (di < EXPOSED_M * 1000) continue;
@@ -275,6 +276,8 @@
         else gauge = S.seriesValueAt(sc.gauge.series, sc.tStart, f.t);
         return {
             t: f.t, wetKm2: wet * t.cellKm2, maxDepth: maxIn / 1000, volume: f.stats.volume,
+            // floodwater standing inside the boundary above the T+0 level, m³
+            floodVol: floodMm / 1000 * t.cellKm2 * 1e6,
             exposed: Math.round(exposed), lifeRisk: Math.round(lifeRisk), perCluster, facilities: fac, gauge,
             watch: (sc.watchPoints || []).map(w => ({ depth: d[w.cell] / 1000, conc: f.conc[w.cell] / 255 }))
         };

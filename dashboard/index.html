@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.6">
+    <link rel="stylesheet" href="css/ops.css?v=1.7">
 </head>
 
 <body>
@@ -256,17 +256,16 @@
                 <canvas id="opsTimeline" height="46"></canvas>
                 <div class="timeline__axis mono" id="opsTimelineAxis"></div>
             </div>
-            <div class="storm">
-                <div class="storm__row">
-                    <label for="rainfallSlider">Storm total, 24 h</label>
-                    <span class="mono" id="rainfallValue">200 mm</span>
+            <div class="accum" title="Floodwater standing inside the area above the normal level at T+0. Rivers in their banks are not counted. Rain falls continuously for the full 24 h.">
+                <div class="accum__row">
+                    <span class="accum__label">Water accumulated</span>
+                    <span class="accum__delta mono" id="accumDelta"></span>
                 </div>
-                <input type="range" id="rainfallSlider" min="40" max="350" step="10" value="200">
-                <div class="seg seg--small" id="stormPresets">
-                    <button type="button" data-mm="100">Moderate</button>
-                    <button type="button" data-mm="200" class="active">Heavy</button>
-                    <button type="button" data-mm="300">Extreme</button>
+                <div class="accum__row accum__row--main">
+                    <span class="accum__value mono" id="accumValue">0<small> m³</small></span>
+                    <span class="accum__alt mono" id="accumAlt"></span>
                 </div>
+                <canvas id="accumSpark" height="18"></canvas>
             </div>
         </footer>
     </div>
@@ -284,11 +283,11 @@
     <script src="js/voice-service.js?v=1.0"></script>
     <script src="js/flood-scenarios.js?v=1.4"></script>
     <script src="js/flood-sim-solver.js?v=1.1"></script>
-    <script src="js/flood-sim.js?v=1.4"></script>
+    <script src="js/flood-sim.js?v=1.5"></script>
     <script src="js/flood-render.js?v=1.3"></script>
     <script src="js/flood-grid.js?v=1.7"></script>
     <script src="js/enhanced.js?v=4.3"></script>
-    <script src="js/ops-ui.js?v=1.4"></script>
+    <script src="js/ops-ui.js?v=1.5"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');

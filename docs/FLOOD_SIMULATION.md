@@ -4,8 +4,12 @@ The dashboard runs a 2D shallow-water model live in the browser over each
 village's **whole administrative area** (Meppadi panchayat at 100 m cells;
 Darbhanga and Dhemaji districts, ~2,500 km² each, at 320 m / 400 m cells).
 Terrain is real (SRTM via AWS Terrarium tiles); rainfall, river flows, breach
-and slope-failure timings are **synthetic** and scale with the storm total set
-in the player bar.
+and slope-failure timings are **synthetic**. The demo runs one storm: 200 mm of
+steady monsoon rain falling continuously for the full 24 h, with heavier bursts
+on top (`FloodSim.setStorm(mm)` still rescales it from code). The player bar
+shows **water accumulated**: the floodwater standing inside the boundary above
+the T+0 level (m³ and crore litres), its change over the last hour, and a 24 h
+sparkline.
 
 ## Pieces
 

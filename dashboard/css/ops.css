@@ -238,10 +238,15 @@ button, select, input { font: inherit; color: inherit; }
 #opsTimeline { width: 100%; height: 46px; display: block; cursor: pointer; }
 .timeline__axis { position: relative; height: 13px; font-size: 10.5px; color: var(--muted); }
 .timeline__axis span { position: absolute; transform: translateX(-50%); }
-.storm { width: 230px; flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; }
-.storm__row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-2); }
-.storm__row .mono { color: var(--text); }
-.storm .seg { align-self: flex-start; }
+.accum { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 1px solid var(--line); }
+.accum__row { white-space: nowrap; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.accum__label { font-size: 11.5px; color: var(--text-2); }
+.accum__delta { font-size: 10.5px; color: var(--muted); }
+.accum__delta.up { color: #7cc3ea; }
+.accum__value { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.accum__value small { font-size: 11px; font-weight: 400; color: var(--text-2); }
+.accum__alt { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+#accumSpark { width: 100%; height: 18px; display: block; }
 input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: transparent; margin: 0; }
 input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--line-2); border-radius: 2px; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--text); margin-top: -4.5px; }
@@ -307,7 +312,8 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 }
 @media (max-width: 1200px) {
     .topbar__scenario { display: none; }
-    .storm { width: 190px; }
+    .accum { width: 250px; }
+    .accum__alt { display: none; }
 }
 @media (max-width: 900px) {
     :root { --top: 96px; --player: 132px; }
