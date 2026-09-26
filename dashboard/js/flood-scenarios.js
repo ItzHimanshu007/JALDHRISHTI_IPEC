@@ -564,6 +564,9 @@
 
         return {
             flood_type: 'Embankment breach · drainage congestion',
+            // the embanked river corridors are the main hazard: grid cells the
+            // rivers run through are rated by how far the river has risen
+            riverCorridor: true,
             summary: 'Rain over the Nepal catchment sends flood waves down the embanked rivers of the district. Sustained load above Danger Level breaches the embankment nearest Darbhanga town, while rain trapped between embankments ponds across the plain.',
             startHour: 6,
             tStart, z, rain, rainWeight, rainConc: 0.1, drainSeries,
