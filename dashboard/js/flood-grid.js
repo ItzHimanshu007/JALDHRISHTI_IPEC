@@ -76,6 +76,7 @@
         const rs = hexes.map(h => h.r), rMax = Math.max(...rs);
         const cols = hexes.map(h => h.q + Math.floor(h.r / 2)), cMin = Math.min(...cols);
         const prefix = PREFIX[sc.villageId] || 'HEX';
+        const gis = cellGis(t, sc);
         hexes.forEach((h, idx) => {
             h.idx = idx;
             h.row = rMax - h.r;                                  // A = northernmost row
@@ -90,8 +91,23 @@
             }
             h.cells.forEach(i => { cellHex[i] = idx; });
             h.areaKm2 = h.cells.length * t.cellKm2;
-            let pop = 0, zsum = 0, wsum = 0;
-            h.cells.forEach(i => { pop += st.cellPop[i]; zsum += t.z[i]; wsum += sc.rainWeight[i]; });
+            let pop = 0, zsum = 0, wsum = 0, zmin = Infinity, zmax = -Infinity, ssum = 0, hsum = 0, dmin = Infinity, unstable = 0;
+            h.cells.forEach(i => {
+                pop += st.cellPop[i]; zsum += t.z[i]; wsum += sc.rainWeight[i];
+                if (t.z[i] < zmin) zmin = t.z[i];
+                if (t.z[i] > zmax) zmax = t.z[i];
+                ssum += t.slope[i]; hsum += gis.hand[i];
+                if (gis.dist[i] < dmin) dmin = gis.dist[i];
+                unstable += gis.unstable[i];
+            });
+            const nC = h.cells.length;
+            h.zMin = zmin; h.zMax = zmax;
+            h.slope = ssum / nC;
+            h.hand = hsum / nC;                      // mean height above the nearest drainage line
+            h.riverKm = dmin / 1000;
+            h.unstablePct = unstable / nC * 100;
+            h.terrain = terrainClass(sc.villageId, h);
+            h.susceptibility = susceptibility(sc.villageId, h);
             // floor at a third of the district's rural density: no inhabited hexagon reads zero
             const ambient = (typeof DISTRICT_AMBIENT_DENSITY_PER_KM2 !== 'undefined' && DISTRICT_AMBIENT_DENSITY_PER_KM2[sc.villageId]) || 250;
             h.population = Math.max(pop, h.areaKm2 * ambient * 0.33);
@@ -106,6 +122,67 @@
         grid = { hexes, cellHex, R, hexArea, chan };
         statsKey = ''; appliedKey = '';
         ensureLayers();
+    }
+
+    // ---------------------------------------------------------------- static GIS
+    /**
+     * Per model cell: drainage lines (from flow accumulation), distance to the
+     * nearest one and height above it (HAND, a standard flood-susceptibility
+     * terrain index), via a two-pass chamfer transform that carries the
+     * nearest drainage cell. Meppadi also gets cells that would fail when the
+     * soil is saturated (infinite-slope model).
+     */
+    function cellGis(t, sc) {
+        const nx = t.nx, ny = t.ny, N = nx * ny;
+        const drainKm2 = t.dx < 150 ? 1.5 : 40;
+        const dist = new Float32Array(N).fill(Infinity);
+        const src = new Int32Array(N).fill(-1);
+        for (let i = 0; i < N; i++) if (t.acc[i] * t.cellKm2 >= drainKm2) { dist[i] = 0; src[i] = i; }
+        const dd = Math.hypot(t.dx, t.dy);
+        const relax = (i, j, w) => { if (dist[j] + w < dist[i]) { dist[i] = dist[j] + w; src[i] = src[j]; } };
+        for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+            const i = r * nx + c;
+            if (c > 0) relax(i, i - 1, t.dx);
+            if (r > 0) { relax(i, i - nx, t.dy); if (c > 0) relax(i, i - nx - 1, dd); if (c < nx - 1) relax(i, i - nx + 1, dd); }
+        }
+        for (let r = ny - 1; r >= 0; r--) for (let c = nx - 1; c >= 0; c--) {
+            const i = r * nx + c;
+            if (c < nx - 1) relax(i, i + 1, t.dx);
+            if (r < ny - 1) { relax(i, i + nx, t.dy); if (c < nx - 1) relax(i, i + nx + 1, dd); if (c > 0) relax(i, i + nx - 1, dd); }
+        }
+        const hand = new Float32Array(N), unstable = new Uint8Array(N);
+        const slopeModel = !!sc.landslide;
+        for (let i = 0; i < N; i++) {
+            hand[i] = src[i] >= 0 ? Math.max(0, t.z[i] - t.z[src[i]]) : 0;
+            if (slopeModel && t.slope[i] >= 26 && FloodScenarios.factorOfSafety(t.slope[i], 1) < 1) unstable[i] = 1;
+        }
+        return { dist, hand, unstable };
+    }
+
+    function terrainClass(vid, h) {
+        if (vid === 'wayanad_meppadi') {
+            if (h.slope >= 22) return 'Steep hillside';
+            if (h.hand < 8) return 'Valley floor / stream corridor';
+            if (h.slope >= 12) return 'Hill slopes';
+            return 'Plateau, gentle slopes';
+        }
+        if (h.slope >= 4) return 'Foothills';
+        if (h.hand < 0.8) return 'Active floodplain';
+        if (h.hand < 2.5) return 'Low-lying plain';
+        if (h.hand < 5) return 'Plain';
+        return 'Raised ground';
+    }
+
+    /** Baseline (pre-storm) flood susceptibility from terrain alone: 0-100 + class. */
+    function susceptibility(vid, h) {
+        const hills = vid === 'wayanad_meppadi';
+        const handN = Math.min(1, h.hand / (hills ? 40 : 5));
+        const distN = Math.min(1, h.riverKm / (hills ? 1 : 6));
+        const flatN = Math.min(1, h.slope / (hills ? 25 : 3));
+        let score = 100 * (0.5 * (1 - handN) + 0.3 * (1 - distN) + 0.2 * (1 - flatN));
+        if (hills) score = Math.max(score, Math.min(100, h.unstablePct * 1.6));   // landslide-prone slopes
+        score = Math.round(score);
+        return { score, label: score >= 65 ? 'High' : score >= 40 ? 'Medium' : 'Low' };
     }
 
     function ensureLayers() {
@@ -165,7 +242,7 @@
             for (const i of h.cells) {
                 const d = f.depth[i] / 1000;
                 vol += d * cellArea;
-                if (d > 0.02) { sum += d; n++; sed += f.conc[i]; }
+                if (d > 0.02 && !chan[i]) { sum += d; n++; sed += f.conc[i]; }
                 if (!chan[i] && d > max) max = d;             // flood depth on land, not in the river bed
                 if (d > 0.15 && !chan[i]) wet++;
                 const sp = Math.hypot(f.u[i], f.v[i]) / 10;
@@ -210,25 +287,33 @@
     function card(idx, compact) {
         const h = grid.hexes[idx], s = stats[idx];
         if (!h) return '';
-        const lvl = s ? s.risk : 0;
-        const rows = s ? [
+        const sim = s && s.t > 0;
+        const lvl = sim ? s.risk : 0;
+        const vid = FloodSim.state.scenario ? FloodSim.state.scenario.villageId : '';
+        const gisRows = [
+            ['Residents (est.)', fmt(h.population)],
+            ['Ground elevation', `${Math.round(h.elevation)} m <span class="dim">(${Math.round(h.zMin)}–${Math.round(h.zMax)})</span>`],
+            ['Mean slope', `${h.slope.toFixed(1)}°`],
+            ['Height above river', `${h.hand.toFixed(1)} m`],
+            ['Nearest river / stream', h.riverKm < 0.05 ? 'runs through cell' : `${h.riverKm.toFixed(1)} km`],
+            ['Terrain', h.terrain],
+            ...(vid === 'wayanad_meppadi' ? [['Unstable when saturated', `${Math.round(h.unstablePct)} % of area`]] : []),
+            ['Flood susceptibility', `<span class="susc susc--${h.susceptibility.label.toLowerCase()}">${h.susceptibility.label} · ${h.susceptibility.score}</span>`],
+            ...(compact ? [] : [['Hexagon area', `${h.areaKm2.toFixed(2)} km²`]])
+        ];
+        const simRows = sim ? [
             ['Water accumulated', fmtVol(s.volume)],
             ['Depth mean / max', `${s.meanDepth.toFixed(2)} / ${s.maxDepth.toFixed(2)} m`],
             ['Area under water', `${Math.round(s.wetFrac * 100)} %`],
-            ['Residents (est.)', fmt(h.population)],
-            ['People in water > 30 cm', fmt(s.atRisk)],
-            ['In deep or fast water', fmt(s.lifeRisk)],
-            ['Rain received', `${Math.round(s.rainMm)} mm`],
-            ...(compact ? [] : [
-                ['Peak flow speed', `${s.maxSpeed.toFixed(1)} m/s`],
-                ['Water type', s.meanDepth < 0.02 ? '—' : (s.sediment > 0.6 ? 'Debris / mud' : s.sediment > 0.35 ? 'Silt-laden river water' : 'Rain runoff')],
-                ['Mean ground level', `${Math.round(h.elevation)} m`],
-                ['Hexagon area', `${h.areaKm2.toFixed(2)} km²`]
-            ])
-        ] : [['Residents (est.)', fmt(h.population)]];
+            ['People in water > 30 cm', fmt(s.atRisk)]
+        ] : null;
+        const dl = (rows) => `<dl class="readout">${rows.map(([k, v]) => `<dt>${k}</dt><dd class="mono">${v}</dd>`).join('')}</dl>`;
+        const tLabel = sim ? `T+${String(Math.floor(s.t / 3600)).padStart(2, '0')}:${String(Math.floor(s.t % 3600 / 60)).padStart(2, '0')}` : '';
         return `<div class="grid-card">
-            <div class="grid-card__head"><span class="mono">${h.id}</span><span class="risk-chip" data-risk="${lvl}">${RISK[lvl]}${s ? ` · ${s.index}` : ''}</span></div>
-            <dl class="readout">${rows.map(([k, v]) => `<dt>${k}</dt><dd class="mono">${v}</dd>`).join('')}</dl></div>`;
+            <div class="grid-card__head"><span class="mono">${h.id}</span><span class="risk-chip" data-risk="${lvl}">${sim ? `${RISK[lvl]} · ${s.index}` : 'Before storm'}</span></div>
+            <div class="grid-card__sec">Terrain &amp; people</div>${dl(gisRows)}
+            ${simRows ? `<div class="grid-card__sec">Flood at ${tLabel}</div>${dl(simRows)}` : '<div class="grid-card__note">Play the scenario to see water in this cell.</div>'}
+        </div>`;
     }
 
     function onHover(e) {
