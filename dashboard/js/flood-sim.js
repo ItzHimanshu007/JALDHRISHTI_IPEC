@@ -122,9 +122,10 @@
             state.cellPopBase = densityPopulation(t);
             state.cellPopFor = state.villageId;
         }
-        // nobody lives in the permanent river channels
         const pop = Float32Array.from(state.cellPopBase);
-        if (sc.initialDepth) for (let i = 0; i < N; i++) if (sc.initialDepth[i] > 0) pop[i] = 0;
+        // River channels: a quarter of the modelled density (people live on
+        // banks, embankments and char islands, but not in the channel itself).
+        if (sc.initialDepth) for (let i = 0; i < N; i++) if (sc.initialDepth[i] > 0) pop[i] *= 0.25;
         state.cellPop = pop;
     }
 

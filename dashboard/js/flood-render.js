@@ -119,22 +119,47 @@
         if (key === fieldKey && field) return;
         fieldKey = key;
         const N = st.terrain.nx * st.terrain.ny;
-        if (!field || field.d.length !== N) field = { d: new Float32Array(N), u: new Float32Array(N), v: new Float32Array(N), c: new Float32Array(N) };
+        if (!field || field.d.length !== N) field = { d: new Float32Array(N), raw: new Float32Array(N), u: new Float32Array(N), v: new Float32Array(N), c: new Float32Array(N) };
         const a = b.a, ia = 1 - a, f0 = b.f0, f1 = b.f1;
         spawnCells = [];
         for (let i = 0; i < N; i++) {
             const d = (f0.depth[i] * ia + f1.depth[i] * a) / 1000;
-            field.d[i] = d;
+            field.raw[i] = d;
             field.u[i] = (f0.u[i] * ia + f1.u[i] * a) / 10;
             field.v[i] = (f0.v[i] * ia + f1.v[i] * a) / 10;
             field.c[i] = (f0.conc[i] * ia + f1.conc[i] * a) / 255;
             if (d > 0.08 && field.u[i] * field.u[i] + field.v[i] * field.v[i] > 0.02) spawnCells.push(i);
         }
+        // Display depth: water also tints the cells around it (60 % of the
+        // neighbouring depth), so one-cell channels and thin sheets stay
+        // readable when the whole district is on screen. Physics is untouched.
+        const nx = st.terrain.nx, ny = st.terrain.ny, raw = field.raw, dd = field.d;
+        for (let r = 0; r < ny; r++) {
+            for (let c = 0; c < nx; c++) {
+                const i = r * nx + c;
+                let m = 0, sum = 0, n = 0;
+                for (let rr = Math.max(0, r - 1); rr <= Math.min(ny - 1, r + 1); rr++) {
+                    for (let cc = Math.max(0, c - 1); cc <= Math.min(nx - 1, c + 1); cc++) {
+                        const v = raw[rr * nx + cc];
+                        sum += v; n++;
+                        if (v > m) m = v;
+                    }
+                }
+                // blend with the 3x3 mean: isolated puddles fade, connected sheets stay;
+                // deep channels widen a little so rivers read at district scale
+                let v = 0.35 * raw[i] + 0.65 * sum / n;
+                if (m > 1) v = Math.max(v, 0.45 * m);
+                dd[i] = v;
+            }
+        }
     }
 
     // ---------------------------------------------------------------- water pixels
-    const CLEAR_SHALLOW = [96, 170, 196], CLEAR_DEEP = [16, 58, 96];
-    const MUD_SHALLOW = [168, 138, 92], MUD_DEEP = [92, 68, 42];
+    // Floodwater: open blue that reads clearly over green fields, deepening
+    // with depth; river / breach water carries a silt tint (never fully brown,
+    // so a flooded plain still reads as water from district scale).
+    const CLEAR_SHALLOW = [74, 160, 226], CLEAR_DEEP = [10, 46, 118];
+    const MUD_SHALLOW = [132, 128, 104], MUD_DEEP = [58, 64, 78];
     const DEPTH_CLASSES = [[0.15, [170, 220, 245]], [0.5, [100, 180, 235]], [1, [45, 130, 215]], [2, [25, 80, 180]], [99, [30, 40, 130]]];
 
     function drawWater(timeSec) {
@@ -181,7 +206,7 @@
                         data[o] = 235; data[o + 1] = 80; data[o + 2] = 60; data[o + 3] = 150;
                     }
                 }
-                if (D < 0.02) continue;
+                if (D < 0.05 || (!inside && D < 0.3)) continue;        // outside the boundary only rivers / deep water
 
                 const U = u[i00] * w00 + u[i01] * w01 + u[i10] * w10 + u[i11] * w11;
                 const V = v[i00] * w00 + v[i01] * w01 + v[i10] * w10 + v[i11] * w11;
@@ -205,21 +230,21 @@
                     const mr = MUD_SHALLOW[0] + (MUD_DEEP[0] - MUD_SHALLOW[0]) * td;
                     const mg = MUD_SHALLOW[1] + (MUD_DEEP[1] - MUD_SHALLOW[1]) * td;
                     const mb = MUD_SHALLOW[2] + (MUD_DEEP[2] - MUD_SHALLOW[2]) * td;
-                    const m = Math.min(1, C * 1.25);
+                    const m = Math.min(0.55, C * 0.8);
                     R = cr + (mr - cr) * m; Gc = cg + (mg - cg) * m; B = cb + (mb - cb) * m;
                 }
                 // ripple shading, stronger in moving water
-                const amp = 0.14 + Math.min(0.35, speed * 0.18);
+                const amp = 0.08 + Math.min(0.25, speed * 0.14);
                 let shade = 1 + (nz - 0.5) * 2 * amp;
                 R *= shade; Gc *= shade; B *= shade;
                 // specular glints and white water
-                const glint = nz > 0.72 ? (nz - 0.72) * 3.2 : 0;
+                const glint = nz > 0.76 ? (nz - 0.76) * 2.6 : 0;
                 const foam = speed > 2.2 ? Math.min(1, (speed - 2.2) * 0.35) * (nz > 0.6 ? 1 : 0.15) : 0;
                 const wLift = Math.max(glint * 0.4, foam * 0.55);
                 R += (235 - R) * wLift; Gc += (240 - Gc) * wLift; B += (240 - B) * wLift;
                 // soft shoreline: shallow edges fade in, with a faint wet rim
-                const edge = D < 0.2 ? (D - 0.02) / 0.18 : 1;
-                const alpha = (depthMode ? 0.8 : 0.7 + 0.25 * Math.min(1, D / 1.5)) * edge * edge * (3 - 2 * edge) * (inside ? 1 : 0.35);
+                const edge = D < 0.15 ? (D - 0.05) / 0.1 : 1;
+                const alpha = (depthMode ? 0.85 : 0.62 + 0.3 * Math.min(1, D / 1.2)) * (0.35 + 0.65 * edge * edge * (3 - 2 * edge)) * (inside ? 1 : 0.3);
                 data[o] = R > 255 ? 255 : R; data[o + 1] = Gc > 255 ? 255 : Gc; data[o + 2] = B > 255 ? 255 : B;
                 data[o + 3] = Math.max(data[o + 3], alpha * 255);
             }
@@ -280,13 +305,13 @@
         const W = rainCanvas.width, H = rainCanvas.height;
         rainCtx.clearRect(0, 0, W, H);
         if (rate < 0.5) { drops.length = 0; return; }
-        const target = Math.min(1600, Math.round(rate * 26));
+        const target = Math.min(900, Math.round(rate * 14));
         while (drops.length < target) drops.push({ x: Math.random() * W, y: Math.random() * H, s: 900 + Math.random() * 700, l: 10 + Math.random() * 16 });
         if (drops.length > target) drops.length = target;
-        rainCtx.fillStyle = `rgba(8,14,22,${Math.min(0.22, rate / 180)})`;
+        rainCtx.fillStyle = `rgba(8,14,22,${Math.min(0.08, rate / 400)})`;
         rainCtx.fillRect(0, 0, W, H);
         const slant = 0.18;
-        rainCtx.strokeStyle = 'rgba(190,205,220,0.28)';
+        rainCtx.strokeStyle = 'rgba(200,214,228,0.22)';
         rainCtx.lineWidth = 1;
         rainCtx.beginPath();
         for (const p of drops) {
@@ -309,7 +334,7 @@
             el.className = `sim-marker sim-marker--${kind}`;
             el.innerHTML = `<span class="sim-marker__dot"></span><span class="sim-marker__label">${label}</span>`;
             const marker = new maplibregl.Marker({ element: el, anchor: 'left' }).setLngLat(lngLat).addTo(map);
-            markers.push({ marker, el, showFrom });
+            markers.push({ marker, el, showFrom, kind });
         };
         const t = FloodSim.state.terrain;
         const sites = sc.breachSites || [];
@@ -328,7 +353,8 @@
     function syncMarkers() {
         const t = FloodSim.state.t;
         markers.forEach(m => {
-            m.el.style.display = layerState.water && t >= m.showFrom() ? '' : 'none';
+            const zoomOk = m.kind !== 'river' || map.getZoom() >= 10.3;
+            m.el.style.display = layerState.water && zoomOk && t >= m.showFrom() ? '' : 'none';
             if (m.site) {
                 const broken = m.site.t !== null && t >= m.site.t;
                 if (broken !== !!m.broken) {

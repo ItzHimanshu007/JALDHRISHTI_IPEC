@@ -315,7 +315,7 @@
             summary: 'Orographic monsoon bursts on the Western Ghats. Slope stability (infinite-slope model) decides whether the valley head above Punchirimattam fails; debris is routed down the Punnapuzha through Mundakkai and Chooralmala.',
             startHour: 20,
             tStart, z: t.z, rain, rainWeight, rainConc: 0.12,
-            infil: { f0: 28 / 1000 / HOUR, fc: 7 / 1000 / HOUR, Fk: 0.045 },
+            infil: { f0: 16 / 1000 / HOUR, fc: 3.5 / 1000 / HOUR, Fk: 0.035 },
             ...f, inflows: [], pulses, stage: null,
             gauge: {
                 name: 'Punnapuzha at Chooralmala', cell: chooralmala, kind: 'depth', unit: 'm depth',
@@ -422,7 +422,7 @@
         const N = t.nx * t.ny;
         const z = Float32Array.from(t.z);
         // Local rain is a fraction of the catchment storm (the flood wave is born upstream in Nepal).
-        const rain = hyetograph(tStart, stormMm * 0.65, 0.4, [
+        const rain = hyetograph(tStart, stormMm * 0.85, 0.4, [
             { t: 2, sd: 1.5, w: 1.0 }, { t: 7, sd: 2, w: 1.3 }, { t: 13, sd: 1.2, w: 0.7 }
         ]);
         const catchRain = hyetograph(tStart, stormMm, 0.3, [{ t: -1, sd: 2, w: 1.4 }, { t: 5, sd: 2.5, w: 1.2 }]);
@@ -461,7 +461,7 @@
         // Carve a channel and build embankments on both banks of every river.
         const bank = new Float32Array(N);
         const levee = new Uint8Array(N);
-        const LEVEE_H = 4.5, CARVE = 2.0;
+        const LEVEE_H = 3.6, CARVE = 2.0;
         rivers.forEach(rv => rv.path.forEach(i => {
             const r = Math.floor(i / t.nx), c = i % t.nx;
             for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
@@ -480,7 +480,7 @@
         const inflows = rivers.map((rv, k) => {
             const areaKm2 = rv.km2 * 6;                         // the catchment continues far into Nepal
             const base = 40 + areaKm2 * 0.012;
-            const series = riverResponse(catchRain, 5 + k * 0.5, 14, areaKm2 * 0.07, base);
+            const series = riverResponse(catchRain, 5 + k * 0.5, 14, areaKm2 * 0.09, base);
             return { name: `River ${k + 1}`, cells: [rv.entry], series, conc: 0.6, areaKm2 };
         });
 
@@ -561,7 +561,7 @@
             summary: 'Rain over the Nepal catchment sends flood waves down the embanked rivers of the district. Sustained load above Danger Level breaches the embankment nearest Darbhanga town, while rain trapped between embankments ponds across the plain.',
             startHour: 6,
             tStart, z, rain, rainWeight, rainConc: 0.1, drainSeries,
-            infil: { f0: 14 / 1000 / HOUR, fc: 3 / 1000 / HOUR, Fk: 0.03 },
+            infil: { f0: 10 / 1000 / HOUR, fc: 2 / 1000 / HOUR, Fk: 0.025 },
             ...f, inflows, pulses: [], stage: null, breaches, initialDepth, initialConc: 0.5,
             gauge: gauge || { name: 'River', kind: 'depth', cell: entries[0], unit: 'm depth', thresholds: [] },
             watchPoints, breach: breachInfo, breachSites, rivers: rivers.map(rv => rv.path), events
@@ -606,7 +606,7 @@
             const q = new Float32Array(n);
             for (let k = 0; k < n; k++) {
                 const th = seriesTime(tStart, k) / HOUR;
-                q[k] = 14000 + stormMm * 55 * smoothstep(-4, 16, th);
+                q[k] = 16000 + stormMm * 80 * smoothstep(-4, 16, th);
             }
             inflows.push({ name: 'Brahmaputra', cells: belt.length ? belt : [eastEntry], series: q, conc: 0.55, areaKm2: 0 });
         }
@@ -630,7 +630,7 @@
         trib.forEach((i0, k) => {
             const i = outlets[k];
             const areaKm2 = t.acc[i0] * t.cellKm2 * 2.5;
-            const series = riverResponse(rain, 1.8 + (k % 3) * 0.4, 6, 0.16 * areaKm2, 3 + areaKm2 * 0.04);
+            const series = riverResponse(rain, 1.8 + (k % 3) * 0.4, 6, 0.22 * areaKm2, 3 + areaKm2 * 0.04);
             const near = nearestPlace(vid, t.toLngLat(i));
             let name = jiadhal && jiadhal.i === i0 ? 'Jiadhal' : (near && near.km < 12 ? `River near ${near.name}` : `North-bank river ${k + 1}`);
             if (inflows.some(x => x.name === name)) name = `North-bank river ${k + 1}`;
@@ -665,7 +665,7 @@
             summary: 'Rain on the Arunachal foothills sends silt-laden flash surges down the north-bank rivers (Jiadhal and its neighbours) while a rising Brahmaputra drowns their outfalls, so water spreads as wide, shallow sheets across the district.',
             startHour: 4,
             tStart, z: t.z, rain, rainWeight, rainConc: 0.1,
-            infil: { f0: 30 / 1000 / HOUR, fc: 8 / 1000 / HOUR, Fk: 0.05 },
+            infil: { f0: 20 / 1000 / HOUR, fc: 5 / 1000 / HOUR, Fk: 0.04 },
             ...f, inflows, pulses: [], initialDepth, initialConc: 0.5, stage: null,
             gauge: {
                 name: nearTown.length ? 'Jiadhal at Dhemaji' : 'Jiadhal, mid reach', kind: 'depth', cell: gcell, unit: 'm depth',

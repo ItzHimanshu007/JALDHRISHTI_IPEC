@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.1">
+    <link rel="stylesheet" href="css/ops.css?v=1.2">
 </head>
 
 <body>
@@ -141,8 +141,8 @@
                         <span class="switch"></span><span class="layer-row__name">Risk grid (hexagons)</span>
                     </button>
                     <div class="grid-legend" id="gridLegend">
-                        <span><i style="background:#5aa9d6"></i>Low</span><span><i style="background:#d8b638"></i>Moderate</span>
-                        <span><i style="background:#e0832f"></i>High</span><span><i style="background:#d44b45"></i>Severe</span>
+                        <span><i style="background:#2f9e57"></i>Safe</span><span><i style="background:#f2c12e"></i>Moderate</span>
+                        <span><i style="background:#e0352b"></i>High</span><span><i style="background:#7a0c12"></i>Severe</span>
                     </div>
                     <button id="btnLayerPopHeatmap" class="layer-row layer-btn" type="button" onclick="togglePopulationHeatmap()">
                         <span class="switch"></span><span class="layer-row__name">Population density</span>
@@ -206,6 +206,34 @@
             </section>
         </aside>
 
+        <!-- On-map legend and event banner -->
+        <div class="map-legend" id="mapLegend">
+            <div class="map-legend__block">
+                <div class="map-legend__title">Floodwater depth</div>
+                <div class="map-legend__ramp"><span style="background:#4aa0e2"></span><span style="background:#2e79c6"></span><span style="background:#1a55a0"></span><span style="background:#0a2e76"></span></div>
+                <div class="map-legend__labels mono"><span>0.1</span><span>0.5</span><span>1</span><span>2+ m</span></div>
+            </div>
+            <div class="map-legend__block" id="mapLegendGrid">
+                <div class="map-legend__title">Risk grid</div>
+                <div class="map-legend__swatches">
+                    <span><i style="background:#2f9e57"></i>Safe</span><span><i style="background:#f2c12e"></i>Moderate</span>
+                    <span><i style="background:#e0352b"></i>High</span><span><i style="background:#7a0c12"></i>Severe</span>
+                </div>
+            </div>
+            <div class="map-legend__block map-legend__marks">
+                <span><i class="mk mk--breach"></i>Breach / slope failure</span>
+                <span><i class="mk mk--gauge"></i>Gauge / embankment</span>
+                <span><i class="mk mk--river"></i>River inflow</span>
+            </div>
+        </div>
+        <div class="event-banner" id="eventBanner" hidden>
+            <span class="event-banner__time mono" id="eventBannerTime"></span>
+            <div>
+                <div class="event-banner__title" id="eventBannerTitle"></div>
+                <div class="event-banner__detail" id="eventBannerDetail"></div>
+            </div>
+        </div>
+
         <!-- Scenario player -->
         <footer class="player" id="opsPlayer">
             <button class="play-btn" id="masterPlayBtn" type="button" aria-label="Play">
@@ -217,6 +245,7 @@
                 <button type="button" data-speed="3600" class="active">1 h/s</button>
                 <button type="button" data-speed="10800">3 h/s</button>
             </div>
+            <button class="btn btn--tour" id="btnTour" type="button" title="Play the scenario and fly to each major event">Guided replay</button>
             <div class="timeline">
                 <canvas id="opsTimeline" height="46"></canvas>
                 <div class="timeline__axis mono" id="opsTimelineAxis"></div>
@@ -247,13 +276,13 @@
     <script src="js/voice-settings.js?v=1.0"></script>
     <script src="js/reports-store.js?v=1.0"></script>
     <script src="js/voice-service.js?v=1.0"></script>
-    <script src="js/flood-scenarios.js?v=1.1"></script>
+    <script src="js/flood-scenarios.js?v=1.2"></script>
     <script src="js/flood-sim-solver.js?v=1.1"></script>
-    <script src="js/flood-sim.js?v=1.1"></script>
-    <script src="js/flood-render.js?v=1.1"></script>
-    <script src="js/flood-grid.js?v=1.0"></script>
-    <script src="js/enhanced.js?v=4.1"></script>
-    <script src="js/ops-ui.js?v=1.1"></script>
+    <script src="js/flood-sim.js?v=1.2"></script>
+    <script src="js/flood-render.js?v=1.2"></script>
+    <script src="js/flood-grid.js?v=1.2"></script>
+    <script src="js/enhanced.js?v=4.2"></script>
+    <script src="js/ops-ui.js?v=1.2"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');

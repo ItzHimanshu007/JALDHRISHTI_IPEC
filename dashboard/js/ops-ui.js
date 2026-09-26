@@ -228,6 +228,7 @@
         if (key !== lastLogKey) {
             const fresh = lastLogKey && lastLogKey.split(':')[1] === String(FloodSim.state.runId) ? past.length - Number(lastLogKey.split(':')[0]) : 0;
             lastLogKey = key;
+            if (fresh > 0 && s.playing) onNewEvents(past.slice(-fresh));
             $('opsLog').innerHTML = past.slice().reverse().map((e, i) => `
                 <li class="event ${i < fresh ? 'is-new' : ''}" data-level="${e.level}" data-idx="${evs.indexOf(e)}">
                     <span class="event__time">${fmtT(e.t).slice(2)}</span>
@@ -238,6 +239,60 @@
         const next = future.slice(0, 2);
         $('opsUpcoming').innerHTML = next.length ? '<div class="upcoming__label">Model expects</div>' + next.map(e => `
             <div class="upcoming__item" data-idx="${evs.indexOf(e)}"><span>${esc(e.title)}</span><span class="mono">in ${fmtDur(e.t - s.t)}</span></div>`).join('') : '';
+    }
+
+    // ------------------------------------------------------------ event banner + guided replay
+    const RANK = { info: 0, green: 0, yellow: 1, orange: 2, red: 3 };
+    let bannerTimer = null;
+    const tour = { active: false, busy: false, timers: [] };
+
+    function showBanner(e, ms) {
+        const b = $('eventBanner');
+        b.dataset.level = e.level;
+        $('eventBannerTime').textContent = fmtT(e.t);
+        $('eventBannerTitle').textContent = e.title;
+        $('eventBannerDetail').textContent = e.detail || '';
+        b.hidden = false;
+        b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+        clearTimeout(bannerTimer);
+        bannerTimer = setTimeout(() => { b.hidden = true; }, ms || 6000);
+    }
+
+    function onNewEvents(list) {
+        const top = list.slice().sort((a, b) => RANK[b.level] - RANK[a.level])[0];
+        if (!top || RANK[top.level] < 1) return;
+        showBanner(top);
+        if (tour.active && !tour.busy && top.lngLat && RANK[top.level] >= 2) focusEvent(top);
+    }
+
+    function later(fn, ms) { tour.timers.push(setTimeout(fn, ms)); }
+
+    function focusEvent(e) {
+        tour.busy = true;
+        FloodSim.pause();
+        map.flyTo({ center: e.lngLat, zoom: FloodSim.state.terrain && FloodSim.state.terrain.dx > 200 ? 11.6 : 13.4, pitch: 50, bearing: 0, duration: 2200, essential: true });
+        showBanner(e, 5200);
+        later(() => { if (!tour.active) return; global.OpsUI.fitArea(appState.currentVillageId); }, 5000);
+        later(() => { if (!tour.active) return; tour.busy = false; FloodSim.play(); }, 6900);
+    }
+
+    function startTour() {
+        tour.active = true; tour.busy = false;
+        $('btnTour').classList.add('active');
+        $('btnTour').textContent = 'Stop replay';
+        FloodSim.seek(0);
+        FloodSim.setSpeed(3600);
+        [...$('opsSpeed').children].forEach(x => x.classList.toggle('active', x.dataset.speed === '3600'));
+        global.OpsUI.fitArea(appState.currentVillageId);
+        later(() => { if (tour.active) FloodSim.play(); }, 1900);
+    }
+
+    function stopTour() {
+        if (!tour.active) return;
+        tour.active = false; tour.busy = false;
+        tour.timers.forEach(clearTimeout); tour.timers = [];
+        $('btnTour').classList.remove('active');
+        $('btnTour').textContent = 'Guided replay';
     }
 
     // ------------------------------------------------------------ exposure lists
@@ -364,7 +419,8 @@
 
     // ------------------------------------------------------------ controls
     function bindControls() {
-        $('masterPlayBtn').addEventListener('click', () => FloodSim.toggle());
+        $('masterPlayBtn').addEventListener('click', () => { stopTour(); FloodSim.toggle(); });
+        $('btnTour').addEventListener('click', () => (tour.active ? stopTour() : startTour()));
 
         $('opsSpeed').addEventListener('click', (e) => {
             const b = e.target.closest('button'); if (!b) return;
@@ -379,7 +435,7 @@
             const r = tl.getBoundingClientRect();
             FloodSim.seek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * sc.tEnd);
         };
-        tl.addEventListener('pointerdown', (e) => { dragging = true; tl.setPointerCapture(e.pointerId); seekAt(e); });
+        tl.addEventListener('pointerdown', (e) => { stopTour(); dragging = true; tl.setPointerCapture(e.pointerId); seekAt(e); });
         tl.addEventListener('pointermove', (e) => { if (dragging) seekAt(e); });
         tl.addEventListener('pointerup', () => { dragging = false; });
 
@@ -402,7 +458,7 @@
             $(id).addEventListener('click', () => {
                 const on = !$(id).classList.contains('active');
                 $(id).classList.toggle('active', on);
-                if (id === 'layerGrid') { FloodGrid.setVisible(on); $('gridLegend').hidden = !on; return; }
+                if (id === 'layerGrid') { FloodGrid.setVisible(on); $('gridLegend').hidden = !on; $('mapLegendGrid').hidden = !on; return; }
                 FloodRender.set($(id).dataset.layer, on);
                 if (id === 'layerWater') $('waterLegend').hidden = !on;
             });
@@ -461,7 +517,7 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.target.closest('input, select, textarea')) return;
-            if (e.code === 'Space') { e.preventDefault(); FloodSim.toggle(); }
+            if (e.code === 'Space') { e.preventDefault(); stopTour(); FloodSim.toggle(); }
             else if (e.key === 'h' || e.key === 'H') togglePanels();
             else if (e.key === 'ArrowRight') FloodSim.seek(FloodSim.state.t + 1800);
             else if (e.key === 'ArrowLeft') FloodSim.seek(FloodSim.state.t - 1800);
@@ -486,6 +542,7 @@
             FloodSim.on('time', onTime);
             FloodSim.on('frame', () => { if (!FloodSim.state.playing) onTime(FloodSim.snapshot()); });
             FloodSim.on('done', () => renderAll(FloodSim.snapshot(), true));
+            FloodSim.on('play', (p) => { if (!p && tour.active && !tour.busy && FloodSim.state.t >= FloodSim.state.scenario.tEnd) stopTour(); });
             FloodSim.on('play', () => renderAll(FloodSim.snapshot()));
             FloodSim.on('error', (e) => { $('opsComputeState').textContent = e.message; });
             bindControls();
@@ -508,11 +565,12 @@
             const narrow = window.innerWidth <= 900;
             map.fitBounds([[w, s], [e, n]], {
                 padding: narrow ? { top: 110, bottom: 150, left: 20, right: 20 } : { top: 90, bottom: 120, left: 360, right: 345 },
-                pitch: 38, bearing: 0, duration: 1800, essential: true
+                pitch: 22, bearing: 0, duration: 1800, essential: true
             });
             return true;
         },
         onVillageChange(id) {
+            stopTour();
             closeSimInspector();
             FloodSim.setVillage(id);
         },
