@@ -540,13 +540,14 @@ function init3DMap() {
                 {
                     "id": "background",
                     "type": "background",
-                    "paint": { "background-color": "#020617" }
+                    // transparent, so the sky gradient behind the map shows above the horizon
+                    "paint": { "background-color": "rgba(0,0,0,0)" }
                 },
                 {
                     "id": "satellite-layer",
                     "type": "raster",
                     "source": "satellite-source",
-                    "paint": { "raster-opacity": 1.0, "raster-saturation": 0 }
+                    "paint": { "raster-opacity": 1.0, "raster-saturation": 0.08, "raster-contrast": 0.08, "raster-brightness-max": 0.96 }
                 }
             ]
         },
@@ -568,16 +569,32 @@ function init3DMap() {
     });
 
     // Add Terrain for 3D display
+    // (the terrain exaggeration used to depend on a removed button and was 0,
+    // i.e. a tilted but flat map; it is now set per area by OpsUI.applyTerrain)
     appState.map.on('styledata', () => {
         if (!appState.map.getSource('terrainSource')) {
-            appState.map.addSource('terrainSource', {
+            const dem = {
                 'type': 'raster-dem',
                 'tiles': ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
                 'encoding': 'terrarium',
-                'tileSize': 256
+                'tileSize': 256,
+                'maxzoom': 14
+            };
+            appState.map.addSource('terrainSource', dem);
+            // separate source for relief shading (MapLibre advises not sharing it with terrain)
+            appState.map.addSource('hillshadeSource', { ...dem });
+            appState.map.addLayer({
+                id: 'terrain-hillshade', type: 'hillshade', source: 'hillshadeSource',
+                paint: {
+                    'hillshade-exaggeration': 0.32,
+                    'hillshade-shadow-color': 'rgba(6, 14, 22, 0.75)',
+                    'hillshade-highlight-color': 'rgba(255, 244, 225, 0.18)',
+                    'hillshade-accent-color': 'rgba(6, 14, 22, 0.35)',
+                    'hillshade-illumination-direction': 315
+                }
             });
-            const isTerrainActive = document.getElementById('btnLayerTerrain')?.classList.contains('active');
-            appState.map.setTerrain({ 'source': 'terrainSource', 'exaggeration': isTerrainActive ? 1.5 : 0 });
+            const x = window.OpsUI && OpsUI.terrainExaggeration ? OpsUI.terrainExaggeration(appState.currentVillageId) : 1.5;
+            appState.map.setTerrain({ 'source': 'terrainSource', 'exaggeration': x });
         }
     });
 
