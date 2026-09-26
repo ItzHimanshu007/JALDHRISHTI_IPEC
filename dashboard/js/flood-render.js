@@ -26,7 +26,6 @@
 
     let map = null;
     let canvas = null, ctx = null, img = null;
-    let sourceBounds = null;
     let noise = null;
     let field = null;              // per-cell interpolated fields for the current time
     let fieldKey = '';
@@ -36,6 +35,8 @@
     let markers = [];
     let rainCanvas = null, rainCtx = null, drops = [];
     let lastDraw = 0;
+    let lastWater = 0;
+    let tiles = [];               // per-map-tile canvas sources the water is copied into
     let pendingScenario = false;
 
     // ---------------------------------------------------------------- noise
@@ -72,20 +73,68 @@
             ctx = canvas.getContext('2d');
             img = ctx.createImageData(W, H);
         }
-        const coords = [[w, n], [e, n], [e, s], [w, s]];
-        const key = coords.join();
-        if (map.getSource('flood-sim-src')) {
-            if (sourceBounds !== key) map.getSource('flood-sim-src').setCoordinates(coords);
-        } else {
-            map.addSource('flood-sim-src', { type: 'canvas', canvas, coordinates: coords, animate: true });
-            const before = ['village-boundary-layer', 'village-boundary-glow'].find(id => map.getLayer(id));
-            map.addLayer({
-                id: 'flood-sim-water', type: 'raster', source: 'flood-sim-src',
-                paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'linear' }
-            }, before);
+        buildTiles(t);
+    }
+
+    // With 3D terrain on, MapLibre pins each image/canvas source to a single
+    // map tile and clips whatever falls outside it, so one canvas spanning a
+    // district gets cut along tile lines. The water is therefore drawn once
+    // into the offscreen domain canvas and copied into one canvas source per
+    // web-mercator tile the domain touches, each covering that tile exactly.
+    function tileBounds(x, y, z) {
+        const n2 = Math.pow(2, z);
+        const lon = (xx) => xx / n2 * 360 - 180;
+        const lat = (yy) => Math.atan(Math.sinh(Math.PI * (1 - 2 * yy / n2))) * 180 / Math.PI;
+        return { w: lon(x), e: lon(x + 1), n: lat(y), s: lat(y + 1) };
+    }
+
+    function buildTiles(t) {
+        tiles.forEach(tl => {
+            if (map.getLayer(tl.layer)) map.removeLayer(tl.layer);
+            if (map.getSource(tl.source)) map.removeSource(tl.source);
+        });
+        tiles = [];
+        const [w, s, e, n] = t.bounds;
+        const z = Math.max(1, Math.floor(Math.log2(360 / (e - w))) + 1);   // 2-3 tiles across the domain
+        const n2 = Math.pow(2, z);
+        const tx = (lon) => Math.floor((lon + 180) / 360 * n2);
+        const ty = (lat) => Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n2);
+        // water sits above the risk-grid fill (so it is never hidden by it) and below the grid outlines
+        const before = ['flood-grid-line', 'village-boundary-layer', 'village-boundary-glow'].find(id => map.getLayer(id));
+        const pxPerDegX = canvas.width / (e - w), pxPerDegY = canvas.height / (n - s);
+        for (let y = ty(n); y <= ty(s); y++) {
+            for (let x = tx(w); x <= tx(e); x++) {
+                const b = tileBounds(x, y, z);
+                const el = document.createElement('canvas');
+                const fw = (b.e - b.w) * pxPerDegX, fh = (b.n - b.s) * pxPerDegY;
+                const k = Math.min(1, 1024 / Math.max(fw, fh));
+                el.width = Math.max(2, Math.round(fw * k)); el.height = Math.max(2, Math.round(fh * k));
+                const id = `flood-sim-${z}-${x}-${y}`;
+                map.addSource(id, { type: 'canvas', canvas: el, animate: true, coordinates: [[b.w, b.n], [b.e, b.n], [b.e, b.s], [b.w, b.s]] });
+                map.addLayer({ id: id + '-water', type: 'raster', source: id,
+                    paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'linear' },
+                    layout: { visibility: layerState.water ? 'visible' : 'none' } }, before);
+                tiles.push({ source: id, layer: id + '-water', el, ctx: el.getContext('2d'), b });
+            }
         }
-        sourceBounds = key;
-        map.setLayoutProperty('flood-sim-water', 'visibility', layerState.water ? 'visible' : 'none');
+    }
+
+    /** Copy the domain canvas into each tile canvas. */
+    function blitTiles() {
+        const [w, s, e, n] = FloodSim.state.terrain.bounds;
+        const W = canvas.width, H = canvas.height;
+        for (const tl of tiles) {
+            const { el, b } = tl;
+            tl.ctx.clearRect(0, 0, el.width, el.height);
+            // domain pixels covered by this tile, and where they land in the tile canvas
+            const sx0 = Math.max(0, (b.w - w) / (e - w) * W), sx1 = Math.min(W, (b.e - w) / (e - w) * W);
+            const sy0 = Math.max(0, (n - b.n) / (n - s) * H), sy1 = Math.min(H, (n - b.s) / (n - s) * H);
+            if (sx1 <= sx0 || sy1 <= sy0) continue;
+            const kx = el.width / (b.e - b.w), ky = el.height / (b.n - b.s);
+            const dx0 = (w + sx0 / W * (e - w) - b.w) * kx, dx1 = (w + sx1 / W * (e - w) - b.w) * kx;
+            const dy0 = (b.n - (n - sy0 / H * (n - s))) * ky, dy1 = (b.n - (n - sy1 / H * (n - s))) * ky;
+            tl.ctx.drawImage(canvas, sx0, sy0, sx1 - sx0, sy1 - sy0, dx0, dy0, dx1 - dx0, dy1 - dy0);
+        }
     }
 
     function onScenario() {
@@ -366,17 +415,35 @@
         });
     }
 
+    // With 3D terrain, MapLibre renders draped layers (raster, fill, line) into
+    // a per-terrain-tile texture and caches it until tiles load or the style
+    // changes, so animated canvases and feature-state colours would freeze.
+    // freeRtt() is the same invalidation MapLibre runs on style changes.
+    function invalidateTerrain() {
+        const tr = map && map.terrain;
+        if (tr && tr.sourceCache && typeof tr.sourceCache.freeRtt === 'function') {
+            tr.sourceCache.freeRtt();
+            map.triggerRepaint();
+        }
+    }
+
     // ---------------------------------------------------------------- loop
     function frame(now) {
         const dt = lastDraw ? Math.min(0.1, (now - lastDraw) / 1000) : 0.016;
         lastDraw = now;
         const st = FloodSim.state;
         if (pendingScenario && map && map.isStyleLoaded()) { pendingScenario = false; onScenario(); }
-        if (map && st.terrain && canvas && map.getSource('flood-sim-src')) {
-            if (layerState.water) {
+        if (map && st.terrain && canvas && tiles.length) {
+            // ~20 fps is plenty for the water, and with 3D terrain every redraw
+            // means re-rendering the draped terrain textures
+            if (layerState.water && now - lastWater >= 50) {
+                const wdt = lastWater ? Math.min(0.15, (now - lastWater) / 1000) : 0.05;
+                lastWater = now;
                 updateField(st.t);
                 drawWater(now / 1000);
-                drawParticles(dt);
+                drawParticles(wdt);
+                blitTiles();
+                invalidateTerrain();
             }
             syncMarkers();
         }
@@ -394,9 +461,10 @@
         },
         set(key, value) {
             layerState[key] = value;
-            if (key === 'water' && map && map.getLayer('flood-sim-water')) map.setLayoutProperty('flood-sim-water', 'visibility', value ? 'visible' : 'none');
+            if (key === 'water' && map) tiles.forEach(tl => { if (map.getLayer(tl.layer)) map.setLayoutProperty(tl.layer, 'visibility', value ? 'visible' : 'none'); });
             if (key === 'style' || key === 'slope') fieldKey = '';
         },
-        get(key) { return layerState[key]; }
+        get(key) { return layerState[key]; },
+        invalidate: invalidateTerrain
     };
 })(window);
