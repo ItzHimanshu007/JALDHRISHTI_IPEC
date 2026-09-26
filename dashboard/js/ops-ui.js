@@ -20,8 +20,8 @@
     // Bihar plain needs a lot before its levees and river beds read at all
     const VIEW = {
         wayanad_meppadi: { exaggeration: 1.4, pitch: 58, bearing: -18 },
-        darbhanga: { exaggeration: 12, pitch: 56, bearing: -8 },
-        dhemaji: { exaggeration: 4, pitch: 55, bearing: 0 },
+        darbhanga: { exaggeration: 6, pitch: 45, bearing: -8 },
+        dhemaji: { exaggeration: 2.2, pitch: 48, bearing: 0 },
         default: { exaggeration: 1.5, pitch: 50, bearing: 0 }
     };
     let lastUi = 0;
@@ -518,11 +518,6 @@
             global.OpsUI.applyTerrain(appState.currentVillageId);
             map.easeTo({ pitch: terrainOn ? (VIEW[appState.currentVillageId] || VIEW.default).pitch : 0, duration: 900 });
         });
-        $('layerColumns').addEventListener('click', () => {
-            const on = !$('layerColumns').classList.contains('active');
-            $('layerColumns').classList.toggle('active', on);
-            FloodGrid.setColumns(on);
-        });
         $('btnResetView').addEventListener('click', () => global.OpsUI.fitArea(appState.currentVillageId));
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'bottom-right');
 
@@ -653,7 +648,7 @@
             const zx = Math.log2(availW / ((e - w) / 360 * 512));
             const zy = Math.log2(availH / ((my(s) - my(n)) * 512));
             map.flyTo({
-                center: [(w + e) / 2, (s + n) / 2], zoom: Math.min(zx, zy) + (terrainOn ? (v.pitch >= 55 ? -0.05 : (zx < zy ? 0.1 : 0.3)) : 0),
+                center: [(w + e) / 2, (s + n) / 2], zoom: Math.min(zx, zy) + (terrainOn ? (zx < zy ? 0.1 : 0.3) : 0),
                 pitch: terrainOn ? v.pitch : 0, bearing: terrainOn ? v.bearing : 0, duration: 2000, essential: true,
                 padding
             });
