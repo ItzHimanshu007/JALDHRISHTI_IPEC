@@ -241,8 +241,9 @@
         // flowing at the start don't colour the grid before the storm
         const base = st.frames[0].depth;
         stats = grid.hexes.map(h => {
-            let vol = 0, sum = 0, max = 0, wet = 0, atRisk = 0, life = 0, vmax = 0, sed = 0, n = 0;
+            let vol = 0, sum = 0, max = 0, wet = 0, atRisk = 0, life = 0, vmax = 0, sed = 0, n = 0, rise = 0;
             for (const i of h.cells) {
+                if (chan[i] && f.k > 0) rise += (f.depth[i] - base[i]) / 1000;
                 const d = f.k === 0 ? 0 : Math.max(0, f.depth[i] - base[i]) / 1000;
                 vol += d * cellArea;
                 if (d > 0.02 && !chan[i]) { sum += d; n++; sed += f.conc[i]; }
@@ -262,9 +263,17 @@
             else if ((max >= 1 && wetFrac >= 0.2) || wetFrac >= 0.5 || popFrac >= 0.25) risk = 3;
             else if ((max >= 0.5 && wetFrac >= 0.05) || wetFrac >= 0.12 || popFrac >= 0.06) risk = 2;
             else if (wetFrac > 0.02) risk = 1;
-            const index = Math.round(100 * Math.min(1, 0.4 * Math.min(1, max / 2.5) + 0.35 * wetFrac + 0.25 * Math.min(1, popFrac * 3)));
+            let index = Math.round(100 * Math.min(1, 0.4 * Math.min(1, max / 2.5) + 0.35 * wetFrac + 0.25 * Math.min(1, popFrac * 3)));
+            // river in spate: the channel and the land between its embankments
+            // are the most dangerous ground in a riverine flood
+            const riverRise = h.channelCells ? Math.max(0, rise / h.channelCells) : 0;
+            if (sc.riverCorridor && h.channelCells) {
+                const rr = riverRise >= 2 ? 4 : riverRise >= 1 ? 3 : riverRise >= 0.4 ? 2 : 0;
+                if (rr > risk) risk = rr;
+                index = Math.max(index, Math.round(Math.min(100, riverRise * 36)));
+            }
             return {
-                volume: vol, meanDepth: n ? sum / n : 0, maxDepth: max, wetFrac, atRisk, lifeRisk: life,
+                volume: vol, meanDepth: n ? sum / n : 0, maxDepth: max, wetFrac, atRisk, lifeRisk: life, riverRise,
                 maxSpeed: vmax, sediment: n ? sed / n / 255 : 0, rainMm: cum * h.rainWeight, risk, index, t: f.t
             };
         });
@@ -306,7 +315,8 @@
         const simRows = sim ? [
             ['Water accumulated', fmtVol(s.volume)],
             ['Depth mean / max', `${s.meanDepth.toFixed(2)} / ${s.maxDepth.toFixed(2)} m`],
-            ['Area under water', `${Math.round(s.wetFrac * 100)} %`]
+            ['Area under water', `${Math.round(s.wetFrac * 100)} %`],
+            ...(h.channelCells && FloodSim.state.scenario && FloodSim.state.scenario.riverCorridor ? [['River above normal', `${s.riverRise.toFixed(2)} m`]] : [])
         ] : null;
         const dl = (rows) => `<dl class="readout">${rows.map(([k, v]) => `<dt>${k}</dt><dd class="mono">${v}</dd>`).join('')}</dl>`;
         const tLabel = sim ? `T+${String(Math.floor(s.t / 3600)).padStart(2, '0')}:${String(Math.floor(s.t % 3600 / 60)).padStart(2, '0')}` : '';
