@@ -237,10 +237,13 @@
         const f = st.frames[k], t = st.terrain, cellArea = t.dx * t.dy;
         const cum = FloodScenarios.seriesValueAt(sc.cumRain, sc.tStart, f.t);
         const chan = grid.chan;
+        // floodwater = water above the normal (T+0) level, so rivers already
+        // flowing at the start don't colour the grid before the storm
+        const base = st.frames[0].depth;
         stats = grid.hexes.map(h => {
             let vol = 0, sum = 0, max = 0, wet = 0, atRisk = 0, life = 0, vmax = 0, sed = 0, n = 0;
             for (const i of h.cells) {
-                const d = f.depth[i] / 1000;
+                const d = f.k === 0 ? 0 : Math.max(0, f.depth[i] - base[i]) / 1000;
                 vol += d * cellArea;
                 if (d > 0.02 && !chan[i]) { sum += d; n++; sed += f.conc[i]; }
                 if (!chan[i] && d > max) max = d;             // flood depth on land, not in the river bed

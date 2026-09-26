@@ -226,9 +226,22 @@
     }
 
     // ------------------------------------------------------------------ derived stats
+    /**
+     * Floodwater = water above the normal level at T+0. Rivers in their banks
+     * and permanent water bodies (and the Brahmaputra / tributaries already
+     * flowing after spin-up) are not flooding and must not count.
+     */
+    function excessDepth(f) {
+        const base = state.frames[0] ? state.frames[0].depth : null;
+        const out = new Uint16Array(f.depth.length);
+        if (!base || f.k === 0) return out;
+        for (let i = 0; i < out.length; i++) { const e = f.depth[i] - base[i]; out[i] = e > 0 ? e : 0; }
+        return out;
+    }
+
     function deriveFrame(f) {
         const t = state.terrain;
-        const d = f.depth;
+        const d = excessDepth(f);
         // area and people inside the village boundary
         let wet = 0, exposed = 0, lifeRisk = 0, maxIn = 0;
         const mask = t.mask, cp = state.cellPop;
@@ -257,8 +270,8 @@
         });
         const sc = state.scenario;
         let gauge = null;
-        if (sc.gauge.kind === 'depth') gauge = d[sc.gauge.cell] / 1000;
-        else if (sc.gauge.kind === 'stage') gauge = (sc.z || t.z)[sc.gauge.cell] + d[sc.gauge.cell] / 1000;
+        if (sc.gauge.kind === 'depth') gauge = f.depth[sc.gauge.cell] / 1000;
+        else if (sc.gauge.kind === 'stage') gauge = (sc.z || t.z)[sc.gauge.cell] + f.depth[sc.gauge.cell] / 1000;
         else gauge = S.seriesValueAt(sc.gauge.series, sc.tStart, f.t);
         return {
             t: f.t, wetKm2: wet * t.cellKm2, maxDepth: maxIn / 1000, volume: f.stats.volume,
@@ -437,7 +450,8 @@
         const k0 = Math.max(0, Math.floor(state.t / sc.frameEvery));
         const k1 = Math.min(state.frames.length - 1, k0 + Math.round((horizonH || 6) * HOUR / sc.frameEvery));
         let d = 0;
-        for (let k = k0; k <= k1; k++) { const f = state.frames[k]; if (f && f.depth[i] > d) d = f.depth[i]; }
+        const base = state.frames[0].depth[i];                  // normal river level is not a hazard
+        for (let k = k0; k <= k1; k++) { const f = state.frames[k]; if (f && f.depth[i] - base > d) d = f.depth[i] - base; }
         d /= 1000;
         if (d < 0.05) return 0.03;
         return Math.min(1, 0.12 + d / 1.3);
