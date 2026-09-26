@@ -122,7 +122,8 @@
         let sum = 0;
         for (let k = 0; k < n; k++) {
             const th = (tStart + k * SERIES_STEP) / HOUR;
-            let v = th >= 0 ? base : 0;
+            // steady monsoon rain all day (gently varying), with heavier bursts on top
+            let v = th >= -1 ? base * (1 + 0.25 * Math.sin(th * 2 * Math.PI / 5.3) + 0.12 * Math.sin(th * 2 * Math.PI / 2.1 + 1)) : 0;
             for (const b of bursts) v += b.w * Math.exp(-0.5 * Math.pow((th - b.t) / b.sd, 2));
             s[k] = v;
             if (th >= 0 && th < 24) sum += v * SERIES_STEP / HOUR;
@@ -255,9 +256,9 @@
 
     function buildMeppadi(t, stormMm) {
         const tStart = -1 * HOUR;
-        const rain = hyetograph(tStart, stormMm, 0.35, [
-            { t: 2.5, sd: 1.0, w: 0.9 }, { t: 6.5, sd: 1.3, w: 2.2 }, { t: 7.8, sd: 0.6, w: 1.6 },
-            { t: 13, sd: 1.5, w: 0.8 }, { t: 18, sd: 1.2, w: 0.4 }
+        const rain = hyetograph(tStart, stormMm, 1.1, [
+            { t: 2.5, sd: 1.0, w: 0.9 }, { t: 6.5, sd: 1.3, w: 2.0 }, { t: 7.8, sd: 0.6, w: 1.4 },
+            { t: 13, sd: 1.5, w: 1.0 }, { t: 18.5, sd: 1.4, w: 0.9 }
         ]);
         const N = t.nx * t.ny;
         let zlo = Infinity, zhi = -Infinity;
@@ -422,10 +423,10 @@
         const N = t.nx * t.ny;
         const z = Float32Array.from(t.z);
         // Local rain is a fraction of the catchment storm (the flood wave is born upstream in Nepal).
-        const rain = hyetograph(tStart, stormMm * 0.85, 0.4, [
-            { t: 2, sd: 1.5, w: 1.0 }, { t: 7, sd: 2, w: 1.3 }, { t: 13, sd: 1.2, w: 0.7 }
+        const rain = hyetograph(tStart, stormMm * 0.85, 1.1, [
+            { t: 2, sd: 1.5, w: 1.0 }, { t: 7, sd: 2, w: 1.3 }, { t: 13, sd: 1.2, w: 0.9 }, { t: 19, sd: 1.5, w: 0.7 }
         ]);
-        const catchRain = hyetograph(tStart, stormMm, 0.3, [{ t: -1, sd: 2, w: 1.4 }, { t: 5, sd: 2.5, w: 1.2 }]);
+        const catchRain = hyetograph(tStart, stormMm, 0.9, [{ t: -1, sd: 2, w: 1.4 }, { t: 5, sd: 2.5, w: 1.2 }, { t: 14, sd: 3, w: 0.8 }]);
         const noise = valueNoise(t.nx, t.ny, 28, 11);
         const rainWeight = new Float32Array(N);
         for (let i = 0; i < N; i++) rainWeight[i] = 0.8 + 0.4 * noise[i];
@@ -575,8 +576,8 @@
         const vid = 'dhemaji';
         const tStart = -8 * HOUR;
         const N = t.nx * t.ny;
-        const rain = hyetograph(tStart, stormMm, 0.3, [
-            { t: 1.5, sd: 1, w: 1.0 }, { t: 6, sd: 1.4, w: 1.5 }, { t: 11.5, sd: 1.2, w: 1.0 }, { t: 17.5, sd: 1, w: 0.5 }
+        const rain = hyetograph(tStart, stormMm, 1.1, [
+            { t: 1.5, sd: 1, w: 1.0 }, { t: 6, sd: 1.4, w: 1.5 }, { t: 11.5, sd: 1.2, w: 1.1 }, { t: 17.5, sd: 1.2, w: 0.9 }
         ]);
         let zlo = Infinity, zhi = -Infinity;
         for (let i = 0; i < N; i++) { zlo = Math.min(zlo, t.z[i]); zhi = Math.max(zhi, t.z[i]); }

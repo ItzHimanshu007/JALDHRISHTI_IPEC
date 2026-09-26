@@ -90,8 +90,8 @@
             kpi('Facilities affected', `${affected}/${fac.length}`, '', null, affected ? 'orange' : null)
         ].join('');
         const cs = $('opsComputeState');
-        if (s.done) cs.textContent = 'model run complete';
-        else if (s.computedUntil >= 0) cs.textContent = `computed to ${fmtT(s.computedUntil)}${s.buffering ? ' · waiting' : ''}`;
+        if (s.done) cs.textContent = 'model ready · 24 h';
+        else if (s.computedUntil >= 0) cs.textContent = `${s.buffering ? 'catching up · ' : 'preparing model · '}${Math.round(s.computedUntil / s.scenario.tEnd * 100)}%`;
     }
 
     // ------------------------------------------------------------ canvases
@@ -116,80 +116,132 @@
         return pts;
     }
 
+    function gaugeNow(s) {
+        const sc = s.scenario;
+        if (sc.gauge.kind === 'series') return FloodScenarios.seriesValueAt(sc.gauge.series, sc.tStart, s.t);
+        // interpolate between the two frames around the clock time, like the map does
+        const b = FloodSim.frameBracket(s.t);
+        const d0 = b && FloodSim.state.derived[b.f0.k], d1 = b && FloodSim.state.derived[b.f1.k];
+        if (!d0) return null;
+        return d1 ? d0.gauge * (1 - b.a) + d1.gauge * b.a : d0.gauge;
+    }
+
+    /**
+     * Gauge chart: the gauge reading (solid up to the clock time, the model's
+     * forecast dashed after it) over the rain falling on the area (bars, past
+     * bright / future dim). Everything is read from the running simulation.
+     */
     function renderGauge(s) {
         const sc = s.scenario;
         const cv = $('opsGaugeChart');
         if (!sc || !cv.clientWidth) return;
         const { ctx, w, h } = setupCanvas(cv);
-        const L = 30, R = 50, T = 8, B = 18;
-        const pw = w - L - R, ph = h - T - B;
+        const L = 34, R = 8, T = 10, RAIN_H = 34, GAP = 8, B = 16;
+        const pw = w - L - R;
+        const gTop = T, gH = h - T - RAIN_H - GAP - B;       // gauge panel
+        const rTop = gTop + gH + GAP;                         // rain panel
         const X = (t) => L + t / sc.tEnd * pw;
+        const cx = X(s.t);
+        ctx.font = '10px IBM Plex Mono, monospace';
+        ctx.textBaseline = 'middle';
 
-        // rain bars (hourly means)
-        let rmax = 5;
-        const bars = [];
-        for (let hh = 0; hh < 24; hh++) {
-            let sum = 0;
-            for (let k = 0; k < 6; k++) sum += FloodScenarios.seriesValueAt(sc.rain, sc.tStart, (hh + k / 6) * HOUR);
-            bars.push(sum / 6); rmax = Math.max(rmax, sum / 6);
-        }
-        rmax = Math.ceil(rmax / 10) * 10;
-        ctx.fillStyle = 'rgba(90,169,214,0.28)';
-        bars.forEach((v, i) => { const bh = v / rmax * ph * 0.55; ctx.fillRect(X(i * HOUR) + 1, T, pw / 24 - 2, bh); });
-
-        // gauge line
+        // --- gauge panel
         const pts = gaugeSeries(sc);
         const ths = sc.gauge.thresholds;
-        let lo = Math.min(...ths.map(t => t.v)), hi = Math.max(...ths.map(t => t.v));
+        let lo = Infinity, hi = -Infinity;
+        ths.forEach(t => { lo = Math.min(lo, t.v); hi = Math.max(hi, t.v); });
         pts.forEach(p => { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); });
+        if (!isFinite(lo)) { lo = 0; hi = 1; }
         if (sc.gauge.kind === 'depth') lo = 0;
-        const pad = (hi - lo) * 0.12 || 0.5;
-        lo -= sc.gauge.kind === 'depth' ? 0 : pad; hi += pad;
-        const Y = (v) => T + ph - (v - lo) / (hi - lo) * ph;
-
-        ctx.font = '10px IBM Plex Mono, monospace';
-        ths.forEach(th => {
-            ctx.strokeStyle = LEVEL_COLOR[th.level];
-            ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(L, Y(th.v)); ctx.lineTo(L + pw, Y(th.v)); ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.fillStyle = LEVEL_COLOR[th.level];
-            ctx.fillText(th.label.slice(0, 7), L + pw + 3, Y(th.v) + 3);
+        const pad = Math.max((hi - lo) * 0.12, 0.2);
+        if (sc.gauge.kind !== 'depth') lo -= pad;
+        hi += pad;
+        const Y = (v) => gTop + gH - (v - lo) / (hi - lo) * gH;
+        ctx.fillStyle = '#141b24'; ctx.fillRect(L, gTop, pw, gH);
+        // axis ticks
+        ctx.fillStyle = '#748291'; ctx.textAlign = 'right';
+        [lo + pad * (sc.gauge.kind === 'depth' ? 0 : 1), (lo + hi) / 2, hi - pad].forEach(v => {
+            ctx.fillText(v.toFixed(sc.gauge.kind === 'depth' ? 1 : 1), L - 4, Y(v));
+            ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(L, Y(v), pw, 1); ctx.fillStyle = '#748291';
         });
+        // thresholds
+        ctx.textAlign = 'left';
+        ths.forEach(th => {
+            const y = Y(th.v);
+            ctx.strokeStyle = LEVEL_COLOR[th.level]; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle = LEVEL_COLOR[th.level];
+            ctx.fillText(th.label, L + 4, y - 6);
+        });
+        // forecast (after the clock), then observed (up to the clock)
+        const past = pts.filter(p => p[0] <= s.t), future = pts.filter(p => p[0] >= s.t);
+        const line = (arr, style, width, dash) => {
+            if (arr.length < 2) return;
+            ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+            ctx.beginPath(); arr.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.stroke();
+            ctx.setLineDash([]);
+        };
+        const cur = gaugeNow(s);
+        if (cur !== null) { past.push([s.t, cur]); future.unshift([s.t, cur]); }
+        if (s.done || sc.gauge.kind === 'series') line(future, 'rgba(217,224,232,0.35)', 1.2, [3, 3]);
+        // observed area fill
+        if (past.length > 1) {
+            ctx.fillStyle = 'rgba(90,169,214,0.14)';
+            ctx.beginPath(); ctx.moveTo(X(past[0][0]), gTop + gH);
+            past.forEach(p => ctx.lineTo(X(p[0]), Y(p[1])));
+            ctx.lineTo(X(past[past.length - 1][0]), gTop + gH); ctx.closePath(); ctx.fill();
+        }
+        line(past, '#e6edf3', 1.8);
 
-        ctx.strokeStyle = '#d9e0e8'; ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        pts.forEach((p, i) => { const x = X(p[0]), y = Y(p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-        ctx.stroke();
+        // --- rain panel
+        let rmax = 5;
+        const bars = [];
+        for (let k = 0; k < 48; k++) {
+            let sum = 0;
+            for (let j = 0; j < 3; j++) sum += FloodScenarios.seriesValueAt(sc.rain, sc.tStart, (k + j / 3 + 1 / 6) * 1800);
+            bars.push(sum / 3); rmax = Math.max(rmax, sum / 3);
+        }
+        rmax = Math.ceil(rmax / 5) * 5;
+        bars.forEach((v, k) => {
+            const t0 = k * 1800, bh = v / rmax * RAIN_H;
+            ctx.fillStyle = t0 + 1800 <= s.t ? 'rgba(90,169,214,0.85)' : (t0 <= s.t ? 'rgba(90,169,214,0.85)' : 'rgba(90,169,214,0.28)');
+            ctx.fillRect(X(t0) + 0.5, rTop + RAIN_H - bh, Math.max(1, pw / 48 - 1), bh);
+        });
+        ctx.fillStyle = '#748291'; ctx.textAlign = 'right';
+        ctx.fillText(String(rmax), L - 4, rTop + 4);
+        ctx.fillText('mm/h', L - 4, rTop + RAIN_H - 4);
 
-        // axes
-        ctx.fillStyle = '#748291';
-        for (let hh = 0; hh <= 24; hh += 6) ctx.fillText(`${hh}h`, X(hh * HOUR) - 6, h - 4);
-        ctx.fillText(`${rmax}`, 2, T + 8);
-        ctx.fillText('mm/h', 2, T + 19);
-        
-
-        // cursor
-        const cx = X(s.t);
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(cx, T); ctx.lineTo(cx, T + ph); ctx.stroke();
-        let cur = null;
-        if (sc.gauge.kind === 'series') cur = FloodScenarios.seriesValueAt(sc.gauge.series, sc.tStart, s.t);
-        else if (s.derived) cur = s.derived.gauge;
+        // --- time axis + cursor
+        ctx.textAlign = 'center'; ctx.fillStyle = '#748291';
+        for (let hh = 0; hh <= 24; hh += 6) ctx.fillText(`${hh}h`, X(hh * HOUR), h - 7);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(cx - 0.5, gTop, 1, rTop + RAIN_H - gTop);
         if (cur !== null) {
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(cx, Y(cur), 3, 0, Math.PI * 2); ctx.fill();
+            const cy = Y(cur);
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI * 2); ctx.fill();
+            // value callout, kept inside the plot
+            const label = `${cur.toFixed(2)} m`;
+            ctx.font = '600 11px IBM Plex Mono, monospace';
+            const tw = ctx.measureText(label).width + 10;
+            let bx = cx + 8; if (bx + tw > L + pw) bx = cx - 8 - tw;
+            const by = Math.min(Math.max(cy - 9, gTop), gTop + gH - 18);
+            ctx.fillStyle = 'rgba(11,15,20,0.92)'; ctx.fillRect(bx, by, tw, 18);
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.strokeRect(bx + 0.5, by + 0.5, tw - 1, 17);
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(label, bx + 5, by + 9.5);
             $('opsGaugeValue').textContent = `${cur.toFixed(2)} ${sc.gauge.unit}`;
         }
-        $('opsGaugeLegend').innerHTML = `<span><i style="background:rgba(90,169,214,.6)"></i>rain, mm/h</span>
-            <span><i style="background:#d9e0e8"></i>${esc(sc.gauge.unit)}</span>` +
-            ths.map(t => `<span><i style="background:${LEVEL_COLOR[t.level]}"></i>${esc(t.label)} ${t.v.toFixed(sc.gauge.kind === 'depth' ? 1 : 2)}</span>`).join('');
+        const lvl = cur === null ? null : ths.slice().reverse().find(th => cur >= th.v);
+        $('opsGaugeLegend').innerHTML =
+            `<span><i style="background:#e6edf3"></i>${esc(sc.gauge.unit)} (model)</span>` +
+            `<span><i style="background:rgba(217,224,232,.45)"></i>forecast</span>` +
+            `<span><i style="background:rgba(90,169,214,.85)"></i>rain ${s.rainNow.toFixed(1)} mm/h</span>` +
+            (lvl ? `<span style="color:${LEVEL_COLOR[lvl.level]}">above ${esc(lvl.label)}</span>` : '<span>below warning</span>');
     }
 
     function renderAxis() {
         $('opsTimelineAxis').innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => `<span style="left:${h / 24 * 100}%">${h}h</span>`).join('');
     }
 
+    /** Scenario timeline: static rain profile; only the playhead moves, and only when playing or scrubbing. */
     function renderTimeline(s) {
         const sc = s.scenario;
         const cv = $('opsTimeline');
@@ -197,24 +249,21 @@
         const { ctx, w, h } = setupCanvas(cv);
         const X = (t) => t / sc.tEnd * w;
         ctx.fillStyle = '#1a222d'; ctx.fillRect(0, 0, w, h);
-        const cu = s.done ? sc.tEnd : Math.max(0, s.computedUntil);
-        ctx.fillStyle = '#212c39'; ctx.fillRect(0, 0, X(cu), h);
-        // rain bars
         let rmax = 1;
-        const n = 96;
-        const vals = [];
+        const n = 96, vals = [];
         for (let i = 0; i < n; i++) { const v = FloodScenarios.seriesValueAt(sc.rain, sc.tStart, (i + 0.5) / n * sc.tEnd); vals.push(v); rmax = Math.max(rmax, v); }
-        ctx.fillStyle = 'rgba(90,169,214,0.55)';
-        vals.forEach((v, i) => { const bh = v / rmax * (h - 14); ctx.fillRect(i / n * w + 0.5, h - 12 - bh, w / n - 1, bh); });
-        // elapsed
-        ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(0, 0, X(s.t), h);
-        // events
+        vals.forEach((v, i) => {
+            const bh = v / rmax * (h - 14);
+            ctx.fillStyle = (i + 0.5) / n * sc.tEnd <= s.t ? 'rgba(90,169,214,0.8)' : 'rgba(90,169,214,0.35)';
+            ctx.fillRect(i / n * w + 0.5, h - 12 - bh, w / n - 1, bh);
+        });
+        // events that have happened so far
         FloodSim.state.events.forEach(e => {
+            if (e.t > s.t) return;
             ctx.fillStyle = LEVEL_COLOR[e.level] || '#748291';
             const x = X(e.t);
             ctx.beginPath(); ctx.moveTo(x, h - 9); ctx.lineTo(x - 4, h - 1); ctx.lineTo(x + 4, h - 1); ctx.closePath(); ctx.fill();
         });
-        // playhead
         ctx.fillStyle = '#fff'; ctx.fillRect(X(s.t) - 1, 0, 2, h);
     }
 

@@ -150,7 +150,7 @@ button, select, input { font: inherit; color: inherit; }
 .kpi[data-level="red"] .kpi__value { color: #ff8a84; }
 
 /* ---------- gauge chart ---------- */
-.gauge-chart { width: 100%; height: 150px; display: block; }
+.gauge-chart { width: 100%; height: 190px; display: block; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--muted); margin-top: 4px; }
 .chart-legend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
 
