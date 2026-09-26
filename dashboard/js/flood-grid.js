@@ -298,7 +298,6 @@
             ['Nearest river / stream', h.riverKm < 0.05 ? 'runs through cell' : `${h.riverKm.toFixed(1)} km`],
             ['Terrain', h.terrain],
             ...(vid === 'wayanad_meppadi' ? [['Unstable when saturated', `${Math.round(h.unstablePct)} % of area`]] : []),
-            ['Flood susceptibility', `<span class="susc susc--${h.susceptibility.label.toLowerCase()}">${h.susceptibility.label} · ${h.susceptibility.score}</span>`],
             ...(compact ? [] : [['Hexagon area', `${h.areaKm2.toFixed(2)} km²`]])
         ];
         const simRows = sim ? [
