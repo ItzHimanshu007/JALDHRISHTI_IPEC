@@ -133,7 +133,7 @@ button, select, input { font: inherit; color: inherit; }
 .panel__meta { color: var(--muted); font-size: 11px; }
 .subhead { font-size: 11px; color: var(--muted); margin: 10px 0 5px; }
 .empty-note { color: var(--muted); font-size: 12px; padding: 6px 2px; }
-.scenario-note { margin: -2px 0 10px; color: var(--text-2); font-size: 12px; }
+.scenario-note { margin: -2px 0 10px; color: var(--text-2); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: help; }
 
 .hud-container.panels-hidden .col { display: none; }
 

@@ -36,6 +36,7 @@
     let markers = [];
     let rainCanvas = null, rainCtx = null, drops = [];
     let lastDraw = 0;
+    let pendingScenario = false;
 
     // ---------------------------------------------------------------- noise
     function makeNoise(size) {
@@ -173,8 +174,8 @@
                 // landslide hatch (independent of water)
                 if (wetNow !== null) {
                     const ci = (Math.round(gy) < 0 ? 0 : Math.min(ny - 1, Math.round(gy))) * nx + Math.min(nx - 1, Math.max(0, Math.round(gx)));
-                    if (wetNow * st.scenario.rainWeight[ci] >= critWet[ci] && ((px + py) % 7) < 2) {
-                        data[o] = 220; data[o + 1] = 60; data[o + 2] = 50; data[o + 3] = 170;
+                    if (wetNow * st.scenario.rainWeight[ci] >= critWet[ci] && t.slope[ci] >= 26 && ((px + py) % 6) === 0) {
+                        data[o] = 235; data[o + 1] = 80; data[o + 2] = 60; data[o + 3] = 150;
                     }
                 }
                 if (D < 0.02) continue;
@@ -210,12 +211,12 @@
                 R *= shade; Gc *= shade; B *= shade;
                 // specular glints and white water
                 const glint = nz > 0.72 ? (nz - 0.72) * 3.2 : 0;
-                const foam = speed > 1.2 ? Math.min(1, (speed - 1.2) * 0.6) * (nz > 0.52 ? 1 : 0.25) : 0;
-                const wLift = Math.max(glint * 0.55, foam * 0.75);
+                const foam = speed > 2.2 ? Math.min(1, (speed - 2.2) * 0.35) * (nz > 0.6 ? 1 : 0.15) : 0;
+                const wLift = Math.max(glint * 0.4, foam * 0.55);
                 R += (235 - R) * wLift; Gc += (240 - Gc) * wLift; B += (240 - B) * wLift;
                 // soft shoreline: shallow edges fade in, with a faint wet rim
-                const edge = D < 0.3 ? (D - 0.02) / 0.28 : 1;
-                const alpha = (depthMode ? 0.78 : 0.62 + 0.3 * Math.min(1, D / 1.5)) * edge * edge * (3 - 2 * edge);
+                const edge = D < 0.2 ? (D - 0.02) / 0.18 : 1;
+                const alpha = (depthMode ? 0.8 : 0.7 + 0.25 * Math.min(1, D / 1.5)) * edge * edge * (3 - 2 * edge);
                 data[o] = R > 255 ? 255 : R; data[o + 1] = Gc > 255 ? 255 : Gc; data[o + 2] = B > 255 ? 255 : B;
                 data[o + 3] = Math.max(data[o + 3], alpha * 255);
             }
@@ -325,6 +326,7 @@
         const dt = lastDraw ? Math.min(0.1, (now - lastDraw) / 1000) : 0.016;
         lastDraw = now;
         const st = FloodSim.state;
+        if (pendingScenario && map && map.isStyleLoaded()) { pendingScenario = false; onScenario(); }
         if (map && st.terrain && canvas && map.getSource('flood-sim-src')) {
             if (layerState.water) {
                 updateField(st.t);
@@ -341,7 +343,8 @@
         init(m) {
             map = m;
             noise = makeNoise(256);
-            FloodSim.on('scenario', () => { if (map.isStyleLoaded()) onScenario(); else map.once('idle', onScenario); });
+            // Attach as soon as the style can take sources; checked every animation frame.
+            FloodSim.on('scenario', () => { pendingScenario = true; });
             requestAnimationFrame(frame);
         },
         set(key, value) {
