@@ -377,3 +377,13 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 
 @media (max-width: 1200px) { .map-legend__marks { display: none; } }
 @media (max-width: 900px) { .map-legend { display: none; } .btn--tour { order: 4; } }
+
+/* grid card sections */
+.grid-card__sec { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 7px 0 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.grid-card__sec:first-of-type { border-top: 0; padding-top: 0; margin-top: 2px; }
+.grid-card__note { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.grid-card .dim { color: var(--muted); font-size: 10.5px; }
+.susc { font-weight: 600; }
+.susc--high { color: #ff8078; }
+.susc--medium { color: #ffd84d; }
+.susc--low { color: #7fd39c; }
