@@ -896,10 +896,11 @@ function addVillageBoundary(villageId) {
             'type': 'line',
             'source': 'village-boundary-source',
             'paint': {
-                'line-color': '#ffcc00',
-                'line-width': 3,
-                'line-opacity': 0.8,
-                'line-dasharray': [2, 1]
+                // white, so it doesn't compete with the yellow risk-grid class
+                'line-color': '#ffffff',
+                'line-width': 2.5,
+                'line-opacity': 0.9,
+                'line-dasharray': [3, 1.5]
             }
         });
 

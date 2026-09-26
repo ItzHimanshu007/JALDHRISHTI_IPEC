@@ -16,7 +16,7 @@ in the player bar.
 | `dashboard/js/flood-scenarios.js` | One scenario per village (below). |
 | `dashboard/js/flood-sim.js` | Runtime: worker, frames, scenario clock, exposure / facility / gauge stats, event detection, alert level, `riskAt()` used by evacuation routing and deployment planning. |
 | `dashboard/js/flood-render.js` | Water surface draped on the 3D terrain (depth + sediment colour, flow-advected ripples, white water), flow streaks, unstable-slope hatch, rain overlay, map pins. |
-| `dashboard/js/flood-grid.js` | Hexagonal risk grid (~220 hexagons per area, IDs like `DBG-F12`, A = northernmost row): water accumulated, mean/max depth, % flooded, residents, people in water > 30 cm and in deep/fast water, rain received, risk class and index. Hover card on the map; full readout on click; ranked list in the Grid cells tab. |
+| `dashboard/js/flood-grid.js` | Hexagonal risk grid (~220 hexagons per area, IDs like `DBG-F12`, A = northernmost row; green = safe, yellow = moderate, red = high, dark red = severe, judged relative to each hexagon's area and residents): water accumulated, mean/max depth, % flooded, residents, people in water > 30 cm and in deep/fast water, rain received, risk class and index. Hover card on the map; full readout on click; ranked list in the Grid cells tab. |
 | `dashboard/js/ops-ui.js` | Panels: KPIs, gauge chart, timeline, event log, settlements / facilities, point readout, layer switches. |
 
 ## Scenarios

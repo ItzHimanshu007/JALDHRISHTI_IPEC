@@ -17,8 +17,9 @@
 
     const TARGET_HEXES = 220;
     const PREFIX = { wayanad_meppadi: 'MPD', darbhanga: 'DBG', dhemaji: 'DMJ' };
-    const RISK = ['None', 'Low', 'Moderate', 'High', 'Severe'];
-    const RISK_COLOR = ['rgba(0,0,0,0)', '#5aa9d6', '#d8b638', '#e0832f', '#d44b45'];
+    // Safe / Low = green, Moderate = yellow, High = red, Severe = dark red
+    const RISK = ['Safe', 'Low', 'Moderate', 'High', 'Severe'];
+    const RISK_COLOR = ['#2f9e57', '#56b84f', '#f2c12e', '#e0352b', '#7a0c12'];
     const SQ3 = Math.sqrt(3);
 
     let map = null;
@@ -28,6 +29,7 @@
     let stats = [];
     let visible = true;
     let hoverId = null;
+    let labels = [];              // HTML markers with hexagon IDs, shown when zoomed in
     let popup = null;
 
     function rowLabel(n) {
@@ -90,11 +92,18 @@
             h.areaKm2 = h.cells.length * t.cellKm2;
             let pop = 0, zsum = 0, wsum = 0;
             h.cells.forEach(i => { pop += st.cellPop[i]; zsum += t.z[i]; wsum += sc.rainWeight[i]; });
-            h.population = pop;
+            // floor at a third of the district's rural density: no inhabited hexagon reads zero
+            const ambient = (typeof DISTRICT_AMBIENT_DENSITY_PER_KM2 !== 'undefined' && DISTRICT_AMBIENT_DENSITY_PER_KM2[sc.villageId]) || 250;
+            h.population = Math.max(pop, h.areaKm2 * ambient * 0.33);
             h.elevation = zsum / h.cells.length;
             h.rainWeight = wsum / h.cells.length;
         });
-        grid = { hexes, cellHex, R, hexArea };
+        labels.forEach(l => l.marker.remove());
+        labels = [];
+        const chan = new Uint8Array(N);
+        if (sc.initialDepth) for (let i = 0; i < N; i++) if (sc.initialDepth[i] > 0) chan[i] = 1;
+        hexes.forEach(h => { h.channelCells = h.cells.reduce((a, i) => a + chan[i], 0); });
+        grid = { hexes, cellHex, R, hexArea, chan };
         statsKey = ''; appliedKey = '';
         ensureLayers();
     }
@@ -113,18 +122,25 @@
             map.addLayer({
                 id: 'flood-grid-fill', type: 'fill', source: 'flood-grid-src',
                 paint: {
-                    'fill-color': ['match', ['coalesce', ['feature-state', 'risk'], 0], 1, RISK_COLOR[1], 2, RISK_COLOR[2], 3, RISK_COLOR[3], 4, RISK_COLOR[4], 'rgba(0,0,0,0)'],
-                    'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.5,
-                        ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.02, 1, 0.12, 0.26]]
+                    'fill-color': ['match', ['coalesce', ['feature-state', 'risk'], 0], 1, RISK_COLOR[1], 2, RISK_COLOR[2], 3, RISK_COLOR[3], 4, RISK_COLOR[4], RISK_COLOR[0]],
+                    // strong at district scale, light when zoomed in so the water shows through
+                    'fill-opacity': ['interpolate', ['linear'], ['zoom'],
+                        9, ['case', ['boolean', ['feature-state', 'hover'], false], 0.85,
+                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.32, 1, 0.4, 2, 0.6, 3, 0.66, 0.78]],
+                        10.8, ['case', ['boolean', ['feature-state', 'hover'], false], 0.7,
+                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.18, 1, 0.24, 2, 0.42, 3, 0.48, 0.58]],
+                        13, ['case', ['boolean', ['feature-state', 'hover'], false], 0.4,
+                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.03, 1, 0.06, 2, 0.14, 3, 0.18, 0.24]]]
                 }
             }, before);
             map.addLayer({
                 id: 'flood-grid-line', type: 'line', source: 'flood-grid-src',
                 paint: {
-                    'line-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffffff', 'rgba(225,232,240,0.32)'],
-                    'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2, 0.7]
+                    'line-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffffff', 'rgba(20,24,28,0.55)'],
+                    'line-width': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['boolean', ['feature-state', 'hover'], false], 2.2, 0.6], 13, ['case', ['boolean', ['feature-state', 'hover'], false], 3, 1.2]]
                 }
             }, before);
+            map.on('zoomend', syncLabels);
             map.on('mousemove', 'flood-grid-fill', onHover);
             map.on('mouseleave', 'flood-grid-fill', onLeave);
         }
@@ -142,26 +158,30 @@
         statsKey = key;
         const f = st.frames[k], t = st.terrain, cellArea = t.dx * t.dy;
         const cum = FloodScenarios.seriesValueAt(sc.cumRain, sc.tStart, f.t);
+        const chan = grid.chan;
         stats = grid.hexes.map(h => {
             let vol = 0, sum = 0, max = 0, wet = 0, atRisk = 0, life = 0, vmax = 0, sed = 0, n = 0;
             for (const i of h.cells) {
                 const d = f.depth[i] / 1000;
                 vol += d * cellArea;
                 if (d > 0.02) { sum += d; n++; sed += f.conc[i]; }
-                if (d > max) max = d;
-                if (d > 0.15) wet++;
+                if (!chan[i] && d > max) max = d;             // flood depth on land, not in the river bed
+                if (d > 0.15 && !chan[i]) wet++;
                 const sp = Math.hypot(f.u[i], f.v[i]) / 10;
                 if (sp > vmax && d > 0.05) vmax = sp;
                 if (d >= 0.3) atRisk += st.cellPop[i];
                 if (d >= 1.5 || d * sp > 1) life += st.cellPop[i];
             }
-            const wetFrac = wet / h.cells.length;
+            const land = h.cells.length - h.channelCells;
+            const wetFrac = land > 0 ? wet / land : 0;
+            const popFrac = atRisk / Math.max(1, h.population), lifeFrac = life / Math.max(1, h.population);
+            // classes are relative to the hexagon (share flooded, share of residents in water)
             let risk = 0;
-            if (max >= 2 || life >= 200 || (wetFrac >= 0.5 && atRisk >= 1000)) risk = 4;
-            else if (max >= 1 || wetFrac >= 0.3 || atRisk >= 500) risk = 3;
-            else if (max >= 0.3 || wetFrac >= 0.1 || atRisk >= 50) risk = 2;
-            else if (wet > 0) risk = 1;
-            const index = Math.round(100 * Math.min(1, 0.45 * Math.min(1, max / 2) + 0.35 * wetFrac + 0.2 * Math.min(1, atRisk / Math.max(1, h.population) * 3)));
+            if ((max >= 2 && wetFrac >= 0.35) || lifeFrac >= 0.12) risk = 4;
+            else if ((max >= 1 && wetFrac >= 0.2) || wetFrac >= 0.5 || popFrac >= 0.25) risk = 3;
+            else if ((max >= 0.5 && wetFrac >= 0.05) || wetFrac >= 0.12 || popFrac >= 0.06) risk = 2;
+            else if (wetFrac > 0.02) risk = 1;
+            const index = Math.round(100 * Math.min(1, 0.4 * Math.min(1, max / 2.5) + 0.35 * wetFrac + 0.25 * Math.min(1, popFrac * 3)));
             return {
                 volume: vol, meanDepth: n ? sum / n : 0, maxDepth: max, wetFrac, atRisk, lifeRisk: life,
                 maxSpeed: vmax, sediment: n ? sed / n / 255 : 0, rainMm: cum * h.rainWeight, risk, index, t: f.t
@@ -176,6 +196,8 @@
         if (!force && appliedKey === statsKey) return;
         appliedKey = statsKey;
         stats.forEach((s, idx) => map.setFeatureState({ source: 'flood-grid-src', id: idx }, { risk: s.risk }));
+        labels.forEach(l => { const r = stats[l.idx] ? stats[l.idx].risk : 0; if (l.el.dataset.risk !== String(r)) l.el.dataset.risk = r; });
+        if (labels.length) syncLabels();
         if (hoverId !== null && popup) popup.setHTML(card(hoverId, true));
     }
 
@@ -227,8 +249,30 @@
         if (popup) popup.remove();
     }
 
+    // IDs appear from zoom 10.8 (only moderate+ hexagons) and for all from 12.
+    function syncLabels() {
+        if (!map || !grid) return;
+        const z = map.getZoom();
+        if (visible && z >= 10.8 && !labels.length) {
+            labels = grid.hexes.map(h => {
+                const el = document.createElement('div');
+                el.className = 'hex-label';
+                el.textContent = h.id.replace(/^[A-Z]+-/, '');
+                el.title = h.id;
+                return { idx: h.idx, el, marker: new maplibregl.Marker({ element: el }).setLngLat(h.center).addTo(map) };
+            });
+            refresh(true);
+        }
+        labels.forEach(l => {
+            const r = stats[l.idx] ? stats[l.idx].risk : 0;
+            const show = visible && (z >= 12.3 || (z >= 10.8 && r >= 2));
+            l.el.style.display = show ? '' : 'none';
+        });
+    }
+
     function setVisible(v) {
         visible = v;
+        syncLabels();
         ['flood-grid-fill', 'flood-grid-line'].forEach(id => { if (map && map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v ? 'visible' : 'none'); });
         if (!v) onLeave();
     }
