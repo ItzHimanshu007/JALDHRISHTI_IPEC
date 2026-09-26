@@ -4,10 +4,12 @@
  * The three villages flood for different physical reasons, so each gets its
  * own scenario on top of its real terrain (dashboard/data/sim/*_terrain.json,
  * baked from SRTM by scripts/build_sim_terrain.py). Only the terrain is real.
- * Rainfall, river flows, breach and slope-failure timings are synthetic,
- * scaled by the storm total the operator sets.
+ * Rainfall, river flows, breach and slope-failure timings are synthetic.
+ * Every area gets the same kind of storm: steady monsoon rain from T+0 at a
+ * near-constant rate for 24 h (total set by FloodSim.setStorm, 200 mm by
+ * default), so floodwater keeps building and the worst state is at the end.
  *
- *   Meppadi (Wayanad)  FLASH FLOOD + DEBRIS FLOW. Orographic monsoon bursts
+ *   Meppadi (Wayanad)  FLASH FLOOD + DEBRIS FLOW. Steady orographic rain
  *                      over steep Western Ghats slopes. Infinite-slope
  *                      stability (Mohr-Coulomb, pore pressure from
  *                      cumulative rain) decides if and when the slope above
@@ -16,12 +18,12 @@
  *                      Mundakkai and Chooralmala.
  *
  *   Darbhanga (Bihar)  EMBANKMENT BREACH + DRAINAGE CONGESTION. Rain upstream
- *                      (Nepal catchment) raises the river; when stage sits
- *                      above Danger Level long enough the embankment breaches
- *                      at Khutwara and a widening breach (broad-crested weir
- *                      flow) spreads water west across the flat plain. Once
- *                      the river is above the city's outfalls the sluices
- *                      close, so local rain can no longer drain.
+ *                      (Nepal catchment) raises the embanked rivers; when a
+ *                      river sits above Danger Level for an hour its weakest
+ *                      bank breaches (inside the solver), the town-side one
+ *                      just upstream of Darbhanga. Once the rivers are above
+ *                      the town outfalls the sluices close, so local rain can
+ *                      no longer drain.
  *
  *   Dhemaji (Assam)    FLASH TRIBUTARIES + BACKWATER SHEET FLOOD. Rain on the
  *                      Arunachal foothills sends sediment-laden flash surges
