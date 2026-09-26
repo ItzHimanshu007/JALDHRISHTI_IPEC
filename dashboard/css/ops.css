@@ -46,7 +46,11 @@ button, select, input { font: inherit; color: inherit; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 [hidden] { display: none !important; }
 
-#map { position: fixed; inset: 0; }
+#map {
+    position: fixed; inset: 0;
+    /* sky above the horizon when the map is tilted (the map's background layer is transparent) */
+    background: linear-gradient(180deg, #04070c 0%, #0c1824 30%, #22384b 55%, #4a6477 72%, #1b2530 100%);
+}
 #rainOverlay { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 
 .hud-container { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
@@ -387,3 +391,9 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .susc--high { color: #ff8078; }
 .susc--medium { color: #ffd84d; }
 .susc--low { color: #7fd39c; }
+
+/* map navigation control (zoom / compass / tilt) */
+.maplibregl-ctrl-group { background: rgba(18, 24, 32, 0.95) !important; border: 1px solid var(--line-2); box-shadow: none !important; }
+.maplibregl-ctrl-group button { width: 30px; height: 30px; }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--line-2) !important; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.85); }

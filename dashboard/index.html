@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.4">
+    <link rel="stylesheet" href="css/ops.css?v=1.5">
 </head>
 
 <body>
@@ -152,7 +152,13 @@
                         <div class="legend-labels"><span>low</span><span>people / km²</span><span>high</span></div>
                     </div>
                 </div>
-                <button id="btnFindRescue" class="btn btn--block" type="button" onclick="toggleRescueMode()">Plan evacuation route</button>
+                <button class="layer-row active" id="layerTerrain" type="button">
+                    <span class="switch"></span><span class="layer-row__name">3D terrain</span>
+                </button>
+                <div class="btn-row">
+                    <button id="btnResetView" class="btn" type="button">Reset view</button>
+                    <button id="btnFindRescue" class="btn" type="button" onclick="toggleRescueMode()">Plan evacuation route</button>
+                </div>
             </section>
 
             <!-- Clicked-cell readout from the simulation -->
@@ -281,8 +287,8 @@
     <script src="js/flood-sim.js?v=1.2"></script>
     <script src="js/flood-render.js?v=1.2"></script>
     <script src="js/flood-grid.js?v=1.4"></script>
-    <script src="js/enhanced.js?v=4.2"></script>
-    <script src="js/ops-ui.js?v=1.3"></script>
+    <script src="js/enhanced.js?v=4.3"></script>
+    <script src="js/ops-ui.js?v=1.4"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');

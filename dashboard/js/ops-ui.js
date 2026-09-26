@@ -15,6 +15,15 @@
     const LEVEL_COLOR = { green: '#3f9d6a', yellow: '#d8b638', orange: '#e0832f', red: '#d44b45', info: '#5aa9d6' };
 
     let map = null;
+    let terrainOn = true;
+    // camera + relief per area: steep Ghats need little exaggeration, the flat
+    // Bihar plain needs a lot before its levees and river beds read at all
+    const VIEW = {
+        wayanad_meppadi: { exaggeration: 1.4, pitch: 58, bearing: -18 },
+        darbhanga: { exaggeration: 6, pitch: 45, bearing: -8 },
+        dhemaji: { exaggeration: 2.2, pitch: 48, bearing: 0 },
+        default: { exaggeration: 1.5, pitch: 50, bearing: 0 }
+    };
     let lastUi = 0;
     let lastLogKey = '';
     let lastListKey = '';
@@ -503,6 +512,15 @@
         slider.addEventListener('input', () => setStorm(Number(slider.value)));
         $('stormPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setStorm(Number(b.dataset.mm), true); });
 
+        $('layerTerrain').addEventListener('click', () => {
+            terrainOn = !terrainOn;
+            $('layerTerrain').classList.toggle('active', terrainOn);
+            global.OpsUI.applyTerrain(appState.currentVillageId);
+            map.easeTo({ pitch: terrainOn ? (VIEW[appState.currentVillageId] || VIEW.default).pitch : 0, duration: 900 });
+        });
+        $('btnResetView').addEventListener('click', () => global.OpsUI.fitArea(appState.currentVillageId));
+        map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'bottom-right');
+
         ['layerWater', 'layerFlow', 'layerRain', 'layerSlope', 'layerGrid'].forEach(id => {
             $(id).addEventListener('click', () => {
                 const on = !$(id).classList.contains('active');
@@ -606,15 +624,33 @@
             FloodSim.state.storm = mm;
             FloodSim.setVillage(appState.currentVillageId);
         },
-        /** Frame the whole village / district, leaving room for the side panels. */
+        /** Vertical exaggeration per area: enough to read the relief, not so much that SRTM noise shows. */
+        terrainExaggeration(id) { return terrainOn ? (VIEW[id] || VIEW.default).exaggeration : 0; },
+        applyTerrain(id) {
+            if (!map || !map.getSource('terrainSource')) return;
+            map.setTerrain({ source: 'terrainSource', exaggeration: global.OpsUI.terrainExaggeration(id) });
+            if (global.FloodRender) FloodRender.invalidate();
+        },
+        /** Frame the whole village / district in 3D, leaving room for the side panels. */
         fitArea(id) {
             const cfg = typeof SIMULATION_CONFIG !== 'undefined' && SIMULATION_CONFIG[id];
             if (!map || !cfg) return false;
+            global.OpsUI.applyTerrain(id);
+            const v = VIEW[id] || VIEW.default;
             const [w, s, e, n] = cfg.bbox;
             const narrow = window.innerWidth <= 900;
-            map.fitBounds([[w, s], [e, n]], {
-                padding: narrow ? { top: 110, bottom: 150, left: 20, right: 20 } : { top: 90, bottom: 120, left: 360, right: 345 },
-                pitch: 22, bearing: 0, duration: 1800, essential: true
+            // frame the area top-down, then tilt in: a tilted fitBounds leaves it tiny in the middle
+            const padding = narrow ? { top: 110, bottom: 150, left: 20, right: 20 } : { top: 70, bottom: 110, left: 350, right: 335 };
+            // zoom that fits the bounds top-down in the space between the panels (512 px tiles)
+            const my = (lat) => (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2;
+            const availW = Math.max(200, window.innerWidth - padding.left - padding.right);
+            const availH = Math.max(200, window.innerHeight - padding.top - padding.bottom);
+            const zx = Math.log2(availW / ((e - w) / 360 * 512));
+            const zy = Math.log2(availH / ((my(s) - my(n)) * 512));
+            map.flyTo({
+                center: [(w + e) / 2, (s + n) / 2], zoom: Math.min(zx, zy) + (terrainOn ? (zx < zy ? 0.1 : 0.3) : 0),
+                pitch: terrainOn ? v.pitch : 0, bearing: terrainOn ? v.bearing : 0, duration: 2000, essential: true,
+                padding
             });
             return true;
         },
