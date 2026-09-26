@@ -87,7 +87,8 @@ function floodSolverProgram(self) {
 
         const pulses = (p.pulses || []).map(pl => ({ ...pl, done: 0 }));
         // Embankment breaches: when the water surface at `watch` stays above
-        // `trigger` for `sustain` seconds, the embankment cells drop to `lowerTo`.
+        // `trigger` (or `rise` m above its T+0 level) for `sustain` seconds, the
+        // embankment cells drop to `lowerTo`.
         const breaches = (p.breaches || []).map(b => ({ ...b, above: 0, done: false }));
         const tEnd = p.tEnd, frameEvery = p.frameEvery;
         let t = p.tStart;
@@ -281,6 +282,11 @@ function floodSolverProgram(self) {
             for (const b of breaches) {
                 if (b.done) continue;
                 const eta = z[b.watch] + h[b.watch];
+                // `rise`: the trigger is measured from the river's own level at T+0
+                if (b.rise != null) {
+                    if (t < 0) continue;
+                    if (b.base == null) { b.base = eta; b.trigger = eta + b.rise; }
+                }
                 b.above = eta >= b.trigger ? b.above + dt : 0;
                 if (b.above >= b.sustain && t >= 0) {
                     b.done = true;

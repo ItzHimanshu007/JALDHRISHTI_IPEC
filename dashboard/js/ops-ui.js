@@ -93,7 +93,7 @@
                 return kpi('Grid cells high / severe', g ? `${hi}/${g.total}` : '--', '', null, g && g.counts[4] ? 'red' : (hi ? 'orange' : null))
                     .replace('</div></div>', `</div><div class="kpi__delta">deepest water ${d ? d.maxDepth.toFixed(1) : '0.0'} m</div></div>`);
             })(),
-            kpi('Rain now', s.rainNow.toFixed(1), 'mm/h', null, s.rainNow >= 35 ? 'orange' : null)
+            kpi('Rain now', s.rainNow.toFixed(1), 'mm/h', null, s.rainSoFar >= 115.6 ? 'orange' : (s.rainSoFar >= 64.5 ? 'yellow' : null))
                 .replace('</div></div>', `</div><div class="kpi__delta">${Math.round(s.rainSoFar)} mm since T+0</div></div>`),
             kpi('Facilities affected', `${affected}/${fac.length}`, '', null, affected ? 'orange' : null)
         ].join('');

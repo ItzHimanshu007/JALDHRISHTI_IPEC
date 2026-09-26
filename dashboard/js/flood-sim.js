@@ -199,6 +199,12 @@
             m.peak = new Uint16Array(m.depth.length);
             for (let i = 0; i < m.depth.length; i++) m.peak[i] = prev && prev.peak && prev.peak[i] > m.depth[i] ? prev.peak[i] : m.depth[i];
             state.frames[m.k] = m;
+            const g = state.scenario.gauge;
+            if (m.k === 0 && g.relative && (g.kind === 'stage' || g.kind === 'depth')) {
+                // gauge levels measured from the river's own level at T+0 (as the breach trigger is)
+                const s0 = (g.kind === 'stage' ? state.scenario.z[g.cell] : 0) + m.depth[g.cell] / 1000;
+                g.thresholds = g.relative.map(r => ({ v: s0 + r.dv, label: r.label, level: r.level }));
+            }
             state.derived[m.k] = deriveFrame(m);
             detectEvents(m.k);
             emit('frame', { k: m.k, t: m.t, computedUntil: computedUntil() });
@@ -302,15 +308,16 @@
         const sc = state.scenario, fl = state.flags;
         const t = cur.t;
 
-        // heavy rain onset
+        // rain totals crossing the IMD categories (heavy 64.5 mm, very heavy 115.6 mm)
         const rainNow = S.seriesValueAt(sc.rain, sc.tStart, t);
-        if (!fl.heavyRain && rainNow >= 15) {
+        const rainSoFar = S.seriesValueAt(sc.cumRain, sc.tStart, t);
+        if (!fl.heavyRain && rainSoFar >= 64.5) {
             fl.heavyRain = true;
-            pushDerived({ t, level: 'yellow', kind: 'rain', title: 'Heavy rain over the area', detail: `${rainNow.toFixed(1)} mm/h and rising. Drains and low-lying roads will start to pond.` });
+            pushDerived({ t, level: 'yellow', kind: 'rain', title: 'Heavy rainfall: 64.5 mm since T+0', detail: `Still falling at ${rainNow.toFixed(1)} mm/h without a break. Soils saturated; drains and low roads ponding.` });
         }
-        if (!fl.veryHeavyRain && rainNow >= 35) {
+        if (!fl.veryHeavyRain && rainSoFar >= 115.6) {
             fl.veryHeavyRain = true;
-            pushDerived({ t, level: 'orange', kind: 'rain', title: 'Very heavy rain', detail: `${rainNow.toFixed(1)} mm/h. Flash-flood response times are now under an hour.` });
+            pushDerived({ t, level: 'orange', kind: 'rain', title: 'Very heavy rainfall: 115.6 mm since T+0', detail: `${rainNow.toFixed(1)} mm/h continuing. Almost all further rain now runs off into rivers and low ground.` });
         }
 
         // settlements taking water
@@ -473,7 +480,7 @@
         let lvl = 'green';
         const bump = (l) => { if (LEVEL_RANK[l] > LEVEL_RANK[lvl]) lvl = l; };
         state.events.forEach(e => { if (e.t <= t && e.level !== 'info') bump(e.level === 'red' ? 'orange' : e.level); });
-        if (sc && S.seriesValueAt(sc.rain, sc.tStart, t) >= 15) bump('yellow');
+        if (sc && S.seriesValueAt(sc.cumRain, sc.tStart, t) >= 64.5) bump('yellow');
         if (d) {
             if (d.exposed > 0) bump('yellow');
             if (d.exposed >= 1000 || d.lifeRisk > 0) bump('orange');

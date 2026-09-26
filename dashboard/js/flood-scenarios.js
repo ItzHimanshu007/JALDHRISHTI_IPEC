@@ -112,19 +112,21 @@
     }
 
     /**
-     * Rain intensity series (mm/h, every 5 min from tStart to SIM_END) made of
-     * Gaussian bursts on a steady monsoon base, scaled so the 0-24 h total
-     * equals `totalMm`.
+     * Rain intensity series (mm/h, every 5 min from tStart to SIM_END): steady
+     * monsoon rain that starts at T+0 and keeps falling at a near-constant rate
+     * (a few per cent of natural flicker) for the full 24 h, scaled so the
+     * 0-24 h total equals `totalMm`. No rain before T+0, so the whole day is
+     * one continuous storm and its worst effects show at the end.
      */
-    function hyetograph(tStart, totalMm, base, bursts) {
+    function hyetograph(tStart, totalMm, phase) {
         const n = Math.round((SIM_END - tStart) / SERIES_STEP) + 1;
         const s = new Float32Array(n);
+        const ph = phase || 0;
         let sum = 0;
         for (let k = 0; k < n; k++) {
             const th = (tStart + k * SERIES_STEP) / HOUR;
-            // steady monsoon rain all day (gently varying), with heavier bursts on top
-            let v = th >= -1 ? base * (1 + 0.25 * Math.sin(th * 2 * Math.PI / 5.3) + 0.12 * Math.sin(th * 2 * Math.PI / 2.1 + 1)) : 0;
-            for (const b of bursts) v += b.w * Math.exp(-0.5 * Math.pow((th - b.t) / b.sd, 2));
+            const v = th < 0 ? 0 : smoothstep(0, 0.25, th) *
+                (1 + 0.04 * Math.sin(th * 2 * Math.PI / 3.7 + ph) + 0.025 * Math.sin(th * 2 * Math.PI / 1.3 + 1 + ph));
             s[k] = v;
             if (th >= 0 && th < 24) sum += v * SERIES_STEP / HOUR;
         }
@@ -261,10 +263,7 @@
 
     function buildMeppadi(t, stormMm) {
         const tStart = -1 * HOUR;
-        const rain = hyetograph(tStart, stormMm, 1.1, [
-            { t: 2.5, sd: 1.0, w: 0.9 }, { t: 6.5, sd: 1.3, w: 2.0 }, { t: 7.8, sd: 0.6, w: 1.4 },
-            { t: 13, sd: 1.5, w: 1.0 }, { t: 18.5, sd: 1.4, w: 0.9 }
-        ]);
+        const rain = hyetograph(tStart, stormMm, 0);
         const N = t.nx * t.ny;
         let zlo = Infinity, zhi = -Infinity;
         for (let i = 0; i < N; i++) { if (t.z[i] < zlo) zlo = t.z[i]; if (t.z[i] > zhi) zhi = t.z[i]; }
@@ -318,7 +317,7 @@
 
         return {
             flood_type: 'Flash flood · debris flow',
-            summary: 'Orographic monsoon bursts on the Western Ghats. Slope stability (infinite-slope model) decides whether the valley head above Punchirimattam fails; debris is routed down the Punnapuzha through Mundakkai and Chooralmala.',
+            summary: 'Steady orographic monsoon rain on the Western Ghats for 24 h. Slope stability (infinite-slope model) decides whether the valley head above Punchirimattam fails; debris is routed down the Punnapuzha through Mundakkai and Chooralmala.',
             startHour: 20,
             tStart, z: t.z, rain, rainWeight, rainConc: 0.12,
             infil: { f0: 16 / 1000 / HOUR, fc: 3.5 / 1000 / HOUR, Fk: 0.035 },
@@ -428,10 +427,8 @@
         const N = t.nx * t.ny;
         const z = Float32Array.from(t.z);
         // Local rain is a fraction of the catchment storm (the flood wave is born upstream in Nepal).
-        const rain = hyetograph(tStart, stormMm * 0.85, 1.1, [
-            { t: 2, sd: 1.5, w: 1.0 }, { t: 7, sd: 2, w: 1.3 }, { t: 13, sd: 1.2, w: 0.9 }, { t: 19, sd: 1.5, w: 0.7 }
-        ]);
-        const catchRain = hyetograph(tStart, stormMm, 0.9, [{ t: -1, sd: 2, w: 1.4 }, { t: 5, sd: 2.5, w: 1.2 }, { t: 14, sd: 3, w: 0.8 }]);
+        const rain = hyetograph(tStart, stormMm * 0.85, 1.3);
+        const catchRain = hyetograph(tStart, stormMm, 2.1);
         const noise = valueNoise(t.nx, t.ny, 28, 11);
         const rainWeight = new Float32Array(N);
         for (let i = 0; i < N; i++) rainWeight[i] = 0.8 + 0.4 * noise[i];
@@ -467,7 +464,7 @@
         // Carve a channel and build embankments on both banks of every river.
         const bank = new Float32Array(N);
         const levee = new Uint8Array(N);
-        const LEVEE_H = 3.6, CARVE = 2.0;
+        const LEVEE_H = 3.6, CARVE = 2.0, DANGER_RISE = 1.2;
         rivers.forEach(rv => rv.path.forEach(i => {
             const r = Math.floor(i / t.nx), c = i % t.nx;
             for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
@@ -486,7 +483,7 @@
         const inflows = rivers.map((rv, k) => {
             const areaKm2 = rv.km2 * 6;                         // the catchment continues far into Nepal
             const base = 40 + areaKm2 * 0.012;
-            const series = riverResponse(catchRain, 5 + k * 0.5, 14, areaKm2 * 0.09, base);
+            const series = riverResponse(catchRain, 3 + k * 0.4, 9, areaKm2 * 0.12, base);
             return { name: `River ${k + 1}`, cells: [rv.entry], series, conc: 0.6, areaKm2 };
         });
 
@@ -503,8 +500,24 @@
             sites.push({ k, i: near.i, dTown: near.d, inside });
         });
         sites.sort((a, b) => a.dTown - b.dTown);
+        // ground level of the embankment around a river cell
+        const bankAt = (w) => {
+            const wr = Math.floor(w / t.nx), wc = w % t.nx;
+            let s = 0, c = 0;
+            for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+                const j = (wr + dr) * t.nx + (wc + dc);
+                if (levee[j]) { s += bank[j]; c++; }
+            }
+            return c ? s / c : Infinity;
+        };
         sites.forEach((st, n) => {
-            if (n === 0) return;                                             // town site already chosen
+            if (n === 0) {
+                // town site: the weakest (lowest) bank on the reach just upstream of town
+                const upTo = st.inside.indexOf(st.i);
+                const reach = st.inside.filter((i, p) => p <= upTo && distKm(t.toLngLat(i), town) <= st.dTown + 4);
+                st.i = reach.reduce((a, j) => bankAt(j) < bankAt(a) ? j : a, st.i);
+                return;
+            }
             const mid = st.inside.slice(Math.floor(st.inside.length * 0.3), Math.ceil(st.inside.length * 0.7));
             st.i = mid.reduce((a, j) => t.z[j] < t.z[a] ? j : a, mid[0]);
         });
@@ -540,16 +553,22 @@
             const WL = bk + 0.6, DL = bk + 1.3, HFL = bk + 2.4;
             const label = placeLabel(vid, tl);
             const id = 'breach' + n;
-            breaches.push({ id, watch: w, cells, lowerTo, trigger: DL + 0.2, sustain: HOUR });
+            // Town site: Danger Level is set from the river's own pre-storm level
+            // (the solver measures it at T+0), so the river is never "already in
+            // danger" when the storm starts.
+            breaches.push(n === 0 ? { id, watch: w, cells, lowerTo, trigger: null, rise: DANGER_RISE, sustain: HOUR }
+                : { id, watch: w, cells, lowerTo, trigger: DL, sustain: HOUR });
             breachSites.push({ id, cell: w, lngLat: tl, t: null, label });
-            events.dynamic[id] = { level: 'red', kind: 'breach', lngLat: tl, title: `Embankment breach near ${label}`,
+            events.dynamic[id] = { level: 'red', kind: 'breach', lngLat: tl, title: /^\d/.test(label) ? `Embankment breach ${label}` : `Embankment breach near ${label}`,
                 detail: n === 0 ? 'Town-side embankment failed after an hour above Danger Level. Floodwater heading for Darbhanga town.'
                     : 'Embankment failed after an hour above Danger Level. Floodwater spreading over the countryside.' };
             if (n === 0) {
                 breachInfo = breachSites[0];
                 gauge = {
                     name: `River stage near ${label.replace(/^\d+ km from /, '')}`, kind: 'stage', cell: w, unit: 'm stage',
-                    thresholds: [{ v: WL, label: 'Warning', level: 'yellow' }, { v: DL, label: 'Danger', level: 'orange' }, { v: HFL, label: 'HFL', level: 'red' }]
+                    thresholds: [{ v: WL, label: 'Warning', level: 'yellow' }, { v: DL, label: 'Danger', level: 'orange' }, { v: HFL, label: 'HFL', level: 'red' }],
+                    // replaced by FloodSim with levels above the T+0 stage once the run starts
+                    relative: [{ dv: 0.6, label: 'Warning', level: 'yellow' }, { dv: DANGER_RISE, label: 'Danger', level: 'orange' }, { dv: 2.2, label: 'HFL', level: 'red' }]
                 };
             }
         });
@@ -584,9 +603,7 @@
         const vid = 'dhemaji';
         const tStart = -8 * HOUR;
         const N = t.nx * t.ny;
-        const rain = hyetograph(tStart, stormMm, 1.1, [
-            { t: 1.5, sd: 1, w: 1.0 }, { t: 6, sd: 1.4, w: 1.5 }, { t: 11.5, sd: 1.2, w: 1.1 }, { t: 17.5, sd: 1.2, w: 0.9 }
-        ]);
+        const rain = hyetograph(tStart, stormMm, 3.4);
         let zlo = Infinity, zhi = -Infinity;
         for (let i = 0; i < N; i++) { zlo = Math.min(zlo, t.z[i]); zhi = Math.max(zhi, t.z[i]); }
         const noise = valueNoise(t.nx, t.ny, 30, 23);
@@ -645,14 +662,24 @@
             if (inflows.some(x => x.name === name)) name = `North-bank river ${k + 1}`;
             inflows.push({ name, cells: neighbours(t, i, 0).length ? [i] : [i0], series, conc: 0.75, areaKm2 });
         });
-        inflows.forEach(inf => {
-            if (inf.name === 'Brahmaputra') return;
-            let kPk = 0;
-            for (let k = 0; k < n; k++) if (inf.series[k] > inf.series[kPk]) kPk = k;
-            if (inf.series[kPk] < 60) return;
-            events.push({ t: Math.max(0, seriesTime(tStart, kPk) - 60 * 60), level: 'orange', kind: 'surge', lngLat: t.toLngLat(inf.cells[0]),
-                title: `Flash surge on the ${inf.name}`, detail: `Peak ~${Math.round(inf.series[kPk])} m³/s leaving the foothills, sand and silt laden.` });
-        });
+        // steady rain: flow keeps climbing all day. A river is surging once it
+        // has risen 60 % of the way from base flow to its end-of-day flow; the
+        // surges come within the same hour or so, so they are one event.
+        const k0 = n - 1 - Math.round(24 * HOUR / SERIES_STEP);
+        const surges = inflows.filter(inf => inf.name !== 'Brahmaputra' && inf.series[n - 1] >= 60).map(inf => {
+            const q0 = inf.series[k0], q1 = inf.series[n - 1], qs = q0 + 0.6 * (q1 - q0);
+            let kS = n - 1;
+            for (let k = k0; k < n; k++) if (inf.series[k] >= qs) { kS = k; break; }
+            return { inf, kS, q: inf.series[n - 1] };
+        }).sort((a, b) => b.q - a.q);
+        if (surges.length) {
+            const first = Math.min(...surges.map(x => x.kS));
+            const lead = surges.find(x => x.inf.name === 'Jiadhal') || surges[0];
+            const list = [lead, ...surges.filter(x => x !== lead)].slice(0, 3).map(x => `${x.inf.name} ~${fmtK(x.q)} m³/s`).join(', ');
+            events.push({ t: seriesTime(tStart, first), level: 'orange', kind: 'surge', lngLat: t.toLngLat(lead.inf.cells[0]),
+                title: `Flash surges on ${surges.length} north-bank rivers`,
+                detail: `${list}${surges.length > 3 ? ' and others' : ''}, leaving the foothills sand and silt laden and still rising.` });
+        }
         const bq = inflows.find(i => i.name === 'Brahmaputra');
         if (bq) {
             events.push({ t: 10 * HOUR, level: 'orange', kind: 'gauge', lngLat: t.toLngLat(bq.cells[0]), title: 'Brahmaputra rising above Danger Level',
@@ -678,7 +705,9 @@
             ...f, inflows, pulses: [], initialDepth, initialConc: 0.5, stage: null,
             gauge: {
                 name: nearTown.length ? 'Jiadhal at Dhemaji' : 'Jiadhal, mid reach', kind: 'depth', cell: gcell, unit: 'm depth',
-                thresholds: [{ v: 1.5, label: 'Warning', level: 'yellow' }, { v: 2.5, label: 'Danger', level: 'orange' }]
+                thresholds: [{ v: 1.5, label: 'Warning', level: 'yellow' }, { v: 2.5, label: 'Danger', level: 'orange' }],
+                // a wide, shallow braided river: levels are set from its own depth at T+0
+                relative: [{ dv: 0.4, label: 'Warning', level: 'yellow' }, { dv: 0.7, label: 'Danger', level: 'orange' }]
             },
             watchPoints: [],
             events
