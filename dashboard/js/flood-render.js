@@ -20,7 +20,7 @@
 (function (global) {
     'use strict';
 
-    const SCALE = 3;               // canvas pixels per model cell
+    let SCALE = 3;                 // canvas pixels per model cell (set per grid so the canvas stays ~350k px)
     const PARTICLES = 1400;
     const layerState = { water: true, flow: true, rain: true, slope: true, style: 'natural' };
 
@@ -64,6 +64,7 @@
         if (!map || !st.terrain) return;
         const t = st.terrain;
         const [w, s, e, n] = t.bounds;
+        SCALE = Math.max(1, Math.min(4, Math.floor(Math.sqrt(350000 / (t.nx * t.ny)))));
         const W = t.nx * SCALE, H = t.ny * SCALE;
         if (!canvas || canvas.width !== W || canvas.height !== H) {
             canvas = canvas || document.createElement('canvas');
@@ -143,6 +144,7 @@
         data.fill(0);
         if (!field) { ctx.putImageData(img, 0, 0); return; }
         const { d, u, v, c } = field;
+        const mask = t.mask;
         const NZ = 256;
         const period = 3.2, ph = (timeSec / period) % 1, ph2 = (ph + 0.5) % 1;
         const wA = 1 - Math.abs(2 * ph - 1), wB = 1 - wA;
@@ -170,6 +172,7 @@
                 const w00 = (1 - fx) * (1 - fy), w01 = fx * (1 - fy), w10 = (1 - fx) * fy, w11 = fx * fy;
                 const D = d[i00] * w00 + d[i01] * w01 + d[i10] * w10 + d[i11] * w11;
                 const o = (py * W + px) * 4;
+                const inside = mask[(fy < 0.5 ? r0 : r1) * nx + (fx < 0.5 ? c0 : c1)];
 
                 // landslide hatch (independent of water)
                 if (wetNow !== null) {
@@ -216,7 +219,7 @@
                 R += (235 - R) * wLift; Gc += (240 - Gc) * wLift; B += (240 - B) * wLift;
                 // soft shoreline: shallow edges fade in, with a faint wet rim
                 const edge = D < 0.2 ? (D - 0.02) / 0.18 : 1;
-                const alpha = (depthMode ? 0.8 : 0.7 + 0.25 * Math.min(1, D / 1.5)) * edge * edge * (3 - 2 * edge);
+                const alpha = (depthMode ? 0.8 : 0.7 + 0.25 * Math.min(1, D / 1.5)) * edge * edge * (3 - 2 * edge) * (inside ? 1 : 0.35);
                 data[o] = R > 255 ? 255 : R; data[o + 1] = Gc > 255 ? 255 : Gc; data[o + 2] = B > 255 ? 255 : B;
                 data[o + 3] = Math.max(data[o + 3], alpha * 255);
             }
@@ -308,17 +311,33 @@
             const marker = new maplibregl.Marker({ element: el, anchor: 'left' }).setLngLat(lngLat).addTo(map);
             markers.push({ marker, el, showFrom });
         };
-        if (sc.gauge.cell !== undefined) add(FloodSim.state.terrain.toLngLat(sc.gauge.cell), 'Gauge · ' + sc.gauge.name, 'gauge', -1);
-        if (sc.breach && sc.breach.t !== null) add(sc.breach.lngLat, 'Embankment breach', 'breach', sc.breach.t);
-        else if (sc.breach) add(sc.breach.lngLat, 'Gauge · ' + sc.gauge.name, 'gauge', -1);
-        sc.events.filter(e => e.kind === 'landslide').forEach(e => add(e.lngLat, e.title.replace(' above Punchirimattam', ''), 'landslide', e.t));
-        sc.inflows.filter(i => i.name !== 'Breach').forEach(i => add(FloodSim.state.terrain.toLngLat(i.cells[0]), i.name, 'river', -1));
+        const t = FloodSim.state.terrain;
+        const sites = sc.breachSites || [];
+        if (sc.gauge.cell !== undefined && !sites.some(b => b.cell === sc.gauge.cell)) add(t.toLngLat(sc.gauge.cell), 'Gauge · ' + sc.gauge.name, 'gauge', () => -1);
+        // embankment watch points turn into breach markers when the embankment fails
+        sites.forEach(b => {
+            add(b.lngLat, 'Embankment · ' + b.label, 'gauge', () => -1);
+            const m = markers[markers.length - 1];
+            m.site = b;
+        });
+        sc.events.filter(e => e.kind === 'landslide').forEach(e => add(e.lngLat, e.title.replace(' above Punchirimattam', ''), 'landslide', () => e.t));
+        sc.inflows.filter(i => !/^River \d+$|^Breach$/.test(i.name)).forEach(i => add(t.toLngLat(i.cells[0]), i.name, 'river', () => -1));
         syncMarkers();
     }
 
     function syncMarkers() {
         const t = FloodSim.state.t;
-        markers.forEach(m => { m.el.style.display = layerState.water && t >= m.showFrom ? '' : 'none'; });
+        markers.forEach(m => {
+            m.el.style.display = layerState.water && t >= m.showFrom() ? '' : 'none';
+            if (m.site) {
+                const broken = m.site.t !== null && t >= m.site.t;
+                if (broken !== !!m.broken) {
+                    m.broken = broken;
+                    m.el.className = `sim-marker sim-marker--${broken ? 'breach' : 'gauge'}`;
+                    m.el.querySelector('.sim-marker__label').textContent = (broken ? 'Breach · ' : 'Embankment · ') + m.site.label;
+                }
+            }
+        });
     }
 
     // ---------------------------------------------------------------- loop
