@@ -12,3 +12,4 @@ Thumbs.db
 .claude/
 .env
 .env*.local
+.cache/

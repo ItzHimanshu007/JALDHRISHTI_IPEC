@@ -147,6 +147,9 @@ function generateTextReport(village) {
         `Type: ${config.floodCharacteristic || 'Standard surface runoff'}`,
         `Risk Factors: ${(config.riskFactors || []).join(', ')}`,
         '',
+        '─── FLOOD SIMULATION ────────────────────────────────────────────',
+        ...(window.FloodSim ? FloodSim.reportLines() : []),
+        '',
         '─── EVACUATION ADVICE ───────────────────────────────────────────',
         config.evacuationAdvice || 'Move to higher ground and designated shelters.',
         '',
@@ -229,7 +232,7 @@ let appState = {
     data: null,
     currentVillageId: 'wayanad_meppadi',
     currentTimeStep: '0h',
-    rainfallAmount: 50, // mm - controls simulation intensity
+    rainfallAmount: 200, // mm storm total over 24 h - drives the flood simulation
     styleUrl: UI_CONFIG.mapStyles.reliable,
     charts: { rainfall: null, moisture: null, yearly: null, timeline: null },
     lastMoveUpdate: 0,
@@ -461,159 +464,6 @@ async function fetchDashboardData() {
     appState.isInitialized = true;
     hideLoading();
     return true;
-}
-
-async function fetchLiveWeather(lat, lon) {
-    if (!lat || !lon) return;
-
-    // Update loading state
-    const elTemp = document.getElementById('weatherTemp');
-    const elDesc = document.getElementById('weatherDesc');
-    if (elTemp) elTemp.style.opacity = '0.5';
-
-    try {
-        // Fetch comprehensive weather data including 7-day forecast
-        const response = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-            `&current_weather=true` +
-            `&hourly=relativehumidity_2m,precipitation,precipitation_probability` +
-            `&daily=precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,weathercode` +
-            `&timezone=auto&forecast_days=7`
-        );
-        const data = await response.json();
-
-        if (data.current_weather) {
-            const current = data.current_weather;
-            const temp = current.temperature;
-            const wind = current.windspeed;
-            const code = current.weathercode;
-
-            // Get humidity (approximate from current hour)
-            const currentHour = new Date().getHours();
-            const humidity = data.hourly?.relativehumidity_2m?.[currentHour] || '--';
-
-            // Update UI
-            if (elTemp) {
-                elTemp.textContent = `${temp.toFixed(1)}°C`;
-                elTemp.style.opacity = '1';
-            }
-
-            const windEl = document.getElementById('weatherWind');
-            const humEl = document.getElementById('weatherHum');
-            if (windEl) windEl.textContent = wind;
-            if (humEl) humEl.textContent = humidity;
-
-            // Map WMO codes to icons/text
-            const wmo = {
-                0: { icon: '☀️', text: 'Clear Sky' },
-                1: { icon: '🌤️', text: 'Mainly Clear' },
-                2: { icon: '⛅', text: 'Partly Cloudy' },
-                3: { icon: '☁️', text: 'Overcast' },
-                45: { icon: '🌫️', text: 'Foggy' },
-                48: { icon: '🌫️', text: 'Depositing Rime Fog' },
-                51: { icon: '🌦️', text: 'Light Drizzle' },
-                53: { icon: '🌦️', text: 'Moderate Drizzle' },
-                55: { icon: '🌧️', text: 'Dense Drizzle' },
-                61: { icon: '🌧️', text: 'Slight Rain' },
-                63: { icon: '🌧️', text: 'Moderate Rain' },
-                65: { icon: '⛈️', text: 'Heavy Rain' },
-                71: { icon: '🌨️', text: 'Slight Snow' },
-                73: { icon: '🌨️', text: 'Moderate Snow' },
-                75: { icon: '❄️', text: 'Heavy Snow' },
-                80: { icon: '🌧️', text: 'Rain Showers' },
-                81: { icon: '🌧️', text: 'Moderate Showers' },
-                82: { icon: '⛈️', text: 'Heavy Showers' },
-                95: { icon: '⚡', text: 'Thunderstorm' },
-                96: { icon: '⛈️', text: 'Thunderstorm & Hail' },
-                99: { icon: '⛈️', text: 'Heavy Thunderstorm' },
-            };
-
-            const condition = wmo[code] || { icon: '❓', text: 'Unknown' };
-            const iconEl = document.getElementById('weatherIcon');
-            const descEl = document.getElementById('weatherDesc');
-            if (iconEl) iconEl.textContent = condition.icon;
-            if (descEl) descEl.textContent = condition.text;
-
-            // Update Time
-            const now = new Date();
-            const timeEl = document.getElementById('weatherTime');
-            if (timeEl) timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            // Store forecast data for short-term chart
-            if (data.daily) {
-                const daily = data.daily;
-                const hasPrecip = daily.precipitation_sum && daily.precipitation_sum.some(p => p > 0);
-
-                if (hasPrecip) {
-                    appState.liveWeatherForecast = {
-                        dates: daily.time || [],
-                        precipitation: daily.precipitation_sum || [],
-                        probability: daily.precipitation_probability_max || [],
-                        tempMax: daily.temperature_2m_max || [],
-                        tempMin: daily.temperature_2m_min || [],
-                        weatherCodes: daily.weathercode || [],
-                        fetchedAt: new Date().toISOString(),
-                        isSynthetic: false
-                    };
-                } else {
-                    // Fallback to synthetic if API returns all zeros (for demo)
-                    appState.liveWeatherForecast = generateSyntheticForecast();
-                }
-
-                // Update short-term chart with real or synthetic data
-                renderShortTermForecast();
-            }
-
-            console.log(`Live Weather Update [${appState.currentVillageId}]: ${temp}°C`);
-        }
-    } catch (error) {
-        console.error("Weather fetch error:", error);
-        // Fallback to synthetic on network error
-        appState.liveWeatherForecast = generateSyntheticForecast();
-        renderShortTermForecast();
-    }
-}
-
-/**
- * Generates synthetic 7-day forecast data for demonstration
- */
-function generateSyntheticForecast() {
-    const village = appState.data?.villages[appState.currentVillageId];
-    const terrain = village?.info?.terrain_type || 'plain';
-
-    // Base precipitation based on terrain
-    let basePrecip = 5;
-    if (terrain === 'hilly_ghats' || terrain === 'brahmaputra_floodplain') basePrecip = 40;
-
-    const dates = [];
-    const precip = [];
-    const prob = [];
-    const tMax = [];
-    const tMin = [];
-
-    const now = new Date();
-    for (let i = 0; i < 7; i++) {
-        const d = new Date(now);
-        d.setDate(now.getDate() + i);
-        dates.push(d.toISOString().split('T')[0]);
-
-        // Random variance
-        const p = Math.max(0, basePrecip + (Math.random() - 0.5) * 20);
-        precip.push(parseFloat(p.toFixed(1)));
-        prob.push(Math.round(Math.min(100, (p / 60) * 100 + Math.random() * 20)));
-        tMax.push(Math.round(25 + Math.random() * 5));
-        tMin.push(Math.round(18 + Math.random() * 5));
-    }
-
-    return {
-        dates,
-        precipitation: precip,
-        probability: prob,
-        tempMax: tMax,
-        tempMin: tMin,
-        fetchedAt: new Date().toISOString(),
-        isSynthetic: true
-    };
 }
 
 function generateReport() {
@@ -882,377 +732,6 @@ function syncUI() {
     updateMapVision(village);
     generateSoilGrid(village); // [NEW] Generate soil data
 }
-function renderEnhancedCharts(village) {
-    const months = village.forecast?.yearly?.monthly_forecast || [];
-    if (!months.length) {
-        console.warn('No monthly forecast data for village:', village.info?.id);
-        return;
-    }
-
-    const cvsYearly = document.getElementById('yearlyChart');
-    if (cvsYearly) {
-        const ctxYearly = cvsYearly.getContext('2d');
-        if (appState.charts.yearly) appState.charts.yearly.destroy();
-
-        // Calculate yearly stats
-        const yearlySummary = village.forecast?.yearly?.yearly_summary || {};
-        const totalRainfall = months.reduce((sum, m) => sum + m.expected_rainfall_mm, 0);
-        const peakMonth = yearlySummary.peak_risk_month || 'July';
-        const highRiskMonths = yearlySummary.high_risk_months || [];
-
-        appState.charts.yearly = new Chart(ctxYearly, {
-            type: 'bar',
-            data: {
-                labels: months.map(m => m.month_name.substring(0, 3)),
-                datasets: [
-                    {
-                        label: 'Expected Rainfall (mm)',
-                        data: months.map(m => m.expected_rainfall_mm),
-                        backgroundColor: months.map(m => {
-                            // Color based on risk level
-                            const risk = m.risk_level || 'low';
-                            if (risk === 'extreme') return 'rgba(239, 68, 68, 0.8)';
-                            if (risk === 'high') return 'rgba(249, 115, 22, 0.8)';
-                            if (risk === 'medium') return 'rgba(234, 179, 8, 0.7)';
-                            return 'rgba(34, 197, 94, 0.6)';
-                        }),
-                        borderColor: months.map(m => {
-                            const risk = m.risk_level || 'low';
-                            if (risk === 'extreme') return '#ef4444';
-                            if (risk === 'high') return '#f97316';
-                            if (risk === 'medium') return '#eab308';
-                            return '#22c55e';
-                        }),
-                        borderWidth: 2,
-                        borderRadius: 4,
-                        order: 2
-                    },
-                    {
-                        label: 'Flood Probability %',
-                        data: months.map(m => (m.flood_probability || 0) * 100),
-                        type: 'line',
-                        borderColor: '#06b6d4',
-                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
-                        borderWidth: 2,
-                        pointRadius: 4,
-                        pointBackgroundColor: months.map(m => {
-                            const prob = m.flood_probability || 0;
-                            if (prob > 0.7) return '#ef4444';
-                            if (prob > 0.4) return '#f97316';
-                            return '#06b6d4';
-                        }),
-                        tension: 0.3,
-                        fill: true,
-                        yAxisID: 'y1',
-                        order: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: 'rgba(255,255,255,0.7)',
-                            font: { size: 9 },
-                            boxWidth: 12,
-                            padding: 8
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                        titleColor: '#fff',
-                        bodyColor: 'rgba(255,255,255,0.8)',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderWidth: 1,
-                        padding: 10,
-                        callbacks: {
-                            title: (items) => {
-                                const month = months[items[0].dataIndex];
-                                const season = month?.season ? month.season.replace('_', ' ').toUpperCase() : '';
-                                return `${month?.month_name || ''} ${season ? '- ' + season : ''}`;
-                            },
-                            afterBody: (items) => {
-                                const month = months[items[0].dataIndex];
-                                if (!month) return [];
-                                const lines = [];
-                                lines.push(`Risk Level: ${(month.risk_level || 'low').toUpperCase()}`);
-                                lines.push(`High Risk Days: ${month.high_risk_days || 0}`);
-                                if (month.alerts && month.alerts.length > 0) {
-                                    lines.push(`⚠️ ${month.alerts[0].message}`);
-                                }
-                                return lines;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        display: true,
-                        beginAtZero: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Rainfall (mm)',
-                            color: 'rgba(255,255,255,0.5)',
-                            font: { size: 9 }
-                        },
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } }
-                    },
-                    y1: {
-                        display: true,
-                        beginAtZero: true,
-                        max: 100,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Flood Prob %',
-                            color: 'rgba(6, 182, 212, 0.7)',
-                            font: { size: 9 }
-                        },
-                        grid: { display: false },
-                        ticks: {
-                            color: 'rgba(6, 182, 212, 0.7)',
-                            font: { size: 9 },
-                            callback: (val) => val + '%'
-                        }
-                    },
-                    x: {
-                        display: true,
-                        grid: { display: false },
-                        ticks: {
-                            color: 'rgba(255,255,255,0.5)',
-                            font: { size: 9 },
-                            callback: function (val, index) {
-                                const month = months[index];
-                                // Highlight peak risk month
-                                if (month.month_name === peakMonth) {
-                                    return '⚠️' + month.month_name.substring(0, 3);
-                                }
-                                return month.month_name.substring(0, 3);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-}
-
-function renderShortTermForecast() {
-    const cvs = document.getElementById('shortTermChart');
-    if (!cvs) return;
-
-    const ctx = cvs.getContext('2d');
-    if (appState.charts.shortTerm) appState.charts.shortTerm.destroy();
-
-    // Use live weather forecast data if available
-    const forecast = appState.liveWeatherForecast;
-
-    let labels = [];
-    let precipData = [];
-    let probData = [];
-    let tempMaxData = [];
-    let tempMinData = [];
-
-    if (forecast && forecast.dates && forecast.dates.length > 0) {
-        // Use real API data
-        labels = forecast.dates.map(d => {
-            const date = new Date(d);
-            return date.toLocaleDateString('en-US', { weekday: 'short' });
-        });
-        precipData = forecast.precipitation.map(p => p || 0);
-        probData = forecast.probability.map(p => p || 0);
-        tempMaxData = forecast.tempMax || [];
-        tempMinData = forecast.tempMin || [];
-    } else {
-        // Fallback - show placeholder until data loads
-        labels = ['Today', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'];
-        precipData = [0, 0, 0, 0, 0, 0, 0];
-        probData = [0, 0, 0, 0, 0, 0, 0];
-    }
-
-    const village = appState.data?.villages[appState.currentVillageId];
-    const villageName = village?.name || 'VILLAGE';
-
-    const total = precipData.reduce((a, b) => a + b, 0).toFixed(1);
-    const maxPrecip = Math.max(...precipData);
-    const highRiskDays = precipData.filter(p => p > 20).length;
-
-    appState.charts.shortTerm = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Rainfall (mm)',
-                    data: precipData,
-                    backgroundColor: precipData.map(p => {
-                        if (p > 50) return 'rgba(239, 68, 68, 0.8)';
-                        if (p > 20) return 'rgba(249, 115, 22, 0.8)';
-                        if (p > 5) return 'rgba(6, 182, 212, 0.7)';
-                        return 'rgba(34, 197, 94, 0.6)';
-                    }),
-                    borderColor: precipData.map(p => {
-                        if (p > 50) return '#ef4444';
-                        if (p > 20) return '#f97316';
-                        if (p > 5) return '#06b6d4';
-                        return '#22c55e';
-                    }),
-                    borderWidth: 2,
-                    borderRadius: 4,
-                    order: 2
-                },
-                {
-                    label: 'Rain Probability %',
-                    data: probData,
-                    type: 'line',
-                    borderColor: '#a855f7',
-                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointBackgroundColor: probData.map(p => {
-                        if (p > 70) return '#ef4444';
-                        if (p > 40) return '#f97316';
-                        return '#a855f7';
-                    }),
-                    tension: 0.3,
-                    fill: true,
-                    yAxisID: 'y1',
-                    order: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        color: 'rgba(255,255,255,0.7)',
-                        font: { size: 8 },
-                        boxWidth: 10,
-                        padding: 6
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    titleColor: '#fff',
-                    bodyColor: 'rgba(255,255,255,0.8)',
-                    borderColor: 'rgba(255,255,255,0.1)',
-                    borderWidth: 1,
-                    padding: 8,
-                    callbacks: {
-                        title: (items) => {
-                            if (forecast && forecast.dates) {
-                                const date = new Date(forecast.dates[items[0].dataIndex]);
-                                return date.toLocaleDateString('en-US', {
-                                    weekday: 'long',
-                                    month: 'short',
-                                    day: 'numeric'
-                                });
-                            }
-                            return items[0].label;
-                        },
-                        afterBody: (items) => {
-                            const idx = items[0].dataIndex;
-                            const lines = [];
-                            if (tempMaxData[idx] !== undefined) {
-                                lines.push(`Temperature: ${tempMinData[idx]}°C - ${tempMaxData[idx]}°C`);
-                            }
-                            const precip = precipData[idx];
-                            if (precip > 50) lines.push('⚠️ Heavy rainfall expected');
-                            else if (precip > 20) lines.push('🌧️ Moderate rainfall');
-                            else if (precip > 5) lines.push('🌦️ Light rainfall');
-                            else lines.push('☀️ Mostly dry');
-                            return lines;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: 'mm',
-                        color: 'rgba(255,255,255,0.4)',
-                        font: { size: 8 }
-                    },
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 8 } }
-                },
-                y1: {
-                    beginAtZero: true,
-                    max: 100,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: '%',
-                        color: 'rgba(168, 85, 247, 0.7)',
-                        font: { size: 8 }
-                    },
-                    grid: { display: false },
-                    ticks: {
-                        color: 'rgba(168, 85, 247, 0.7)',
-                        font: { size: 8 },
-                        callback: (val) => val + '%'
-                    }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 8 } }
-                }
-            }
-        }
-    });
-
-    const panelHeader = cvs.closest('.glass-panel')?.querySelector('.panel-header');
-    if (panelHeader && villageName) {
-        const hasSyntheticTag = forecast?.isSynthetic ? ' <span class="tag-ai" style="font-size:0.6rem; vertical-align:middle; margin-left:5px;">SIMULATED</span>' : '';
-        const rainfallSummary = `Total: ${total}mm | ${highRiskDays > 0 ? '⚠️' + highRiskDays + ' rainy days' : '☀️ Mostly dry'}`;
-
-        panelHeader.innerHTML = `
-            <span style="display:flex; align-items:center; gap:8px;">
-                <span class="layer-icon">🌧️</span> ${villageName.toUpperCase()}
-                ${hasSyntheticTag}
-            </span>
-            <span style="font-size:0.6rem; color:var(--text-muted); font-weight:400;">
-                ${rainfallSummary}
-            </span>
-        `;
-    }
-
-    const summaryEl = document.getElementById('forecastSummary');
-    if (summaryEl) {
-        if (maxPrecip > 50) {
-            summaryEl.innerHTML = `<span style="color:#ef4444">⚠️ Heavy rain expected: ${total}mm total</span>`;
-        } else if (maxPrecip > 20) {
-            summaryEl.innerHTML = `<span style="color:#f97316">🌧️ Moderate rain: ${total}mm total</span>`;
-        } else if (total > 0) {
-            summaryEl.textContent = `Expected: ${total}mm over 7 days`;
-        } else {
-            summaryEl.textContent = `Loading forecast...`;
-        }
-    }
-}
-
-
 function updateMapVision(village) {
     if (!appState.map) return;
 
@@ -1630,8 +1109,8 @@ function bindEvents() {
         const village = appState.data.villages[appState.currentVillageId];
         updateMapVision(village);
 
-        // Refresh the Weather & Time Control panel for the new village
-        if (typeof loadWeatherForVillage === 'function') loadWeatherForVillage(appState.currentVillageId);
+        // Re-run the flood simulation for the new area
+        if (window.OpsUI) OpsUI.onVillageChange(appState.currentVillageId);
     });
 
 
@@ -1640,87 +1119,7 @@ function bindEvents() {
         generateReport();
     });
 
-    // Opacity Slider
-    // Opacity Slider removed
-
-    // 2. Timeline Player Logic
-    const playBtn = document.getElementById('masterPlayBtn');
-    const timeDisplay = document.getElementById('timeDisplay');
-    const timelineFill = document.getElementById('timelineFill');
-    const ticks = document.querySelectorAll('.tick');
-
-    playBtn.addEventListener('click', () => {
-        if (appState.animationId) {
-            // STOP
-            clearInterval(appState.animationId);
-            appState.animationId = null;
-            playBtn.textContent = '▶';
-            playBtn.style.background = 'var(--accent-primary)';
-            playBtn.style.color = 'white';
-        } else {
-            // PLAY
-            playBtn.textContent = '⏸';
-            playBtn.style.background = 'var(--bg-elevated)';
-            playBtn.style.color = 'var(--accent-secondary)';
-
-            appState.animationId = setInterval(() => {
-                let currentIdx = TIME_STEPS.indexOf(appState.currentTimeStep);
-                let nextIdx = (currentIdx + 1) % TIME_STEPS.length;
-                appState.currentTimeStep = TIME_STEPS[nextIdx];
-
-                // Update UI state w/o triggering redundant events
-                updateTimeUI(nextIdx);
-                const village = appState.data.villages[appState.currentVillageId];
-                updateMapVision(village);
-                if (typeof syncHourlyFromSimulation === 'function') syncHourlyFromSimulation();
-
-                // Rescue path removed
-
-                // Generate report at end of simulation cycle (24h)
-                // Auto-report disabled as per user request
-                // if (nextIdx === 3) { generateSimulationReport(village); }
-            }, 2500);
-        }
-    });
-
-    // Click on timeline ticks
-    ticks.forEach(tick => {
-        tick.addEventListener('click', () => {
-            const idx = parseInt(tick.dataset.t);
-            appState.currentTimeStep = TIME_STEPS[idx];
-            updateTimeUI(idx);
-            updateMapVision(appState.data.villages[appState.currentVillageId]);
-            if (typeof syncHourlyFromSimulation === 'function') syncHourlyFromSimulation();
-        });
-    });
-
-    // 3. Layer Commanders removed
-
-    // 4. Rainfall Slider
-    const rainfallSlider = document.getElementById('rainfallSlider');
-    const rainfallValue = document.getElementById('rainfallValue');
-
-    const debouncedUpdate = debounce(async () => {
-        const village = appState.data.villages[appState.currentVillageId];
-        updateSimulationImpact();
-
-        // Fetch from API and update map
-        await fetchFloodSimulation();
-        updateMapVision(village);
-        startFloodAnimation();
-    }, 150);
-
-    if (rainfallSlider) {
-        rainfallSlider.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            if (appState.rainfallAmount === val) return;
-
-            appState.rainfallAmount = val;
-            rainfallValue.textContent = `${appState.rainfallAmount} mm`;
-
-            debouncedUpdate();
-        });
-    }
+    // Scenario player, timeline and storm slider are handled by ops-ui.js
 
     // 5. Close Report Button
     const closeReportBtn = document.getElementById('closeReport');
@@ -2030,9 +1429,8 @@ async function run() {
         bindEvents();
         init3DMap();
 
-        // Weather & Time Control panel (dashboard/js/weather-time-panel.js) —
-        // initializes with today's date and the current hour active.
-        if (typeof initWeatherTimePanel === 'function') initWeatherTimePanel();
+        // Flood simulation + operations panels (flood-sim.js, ops-ui.js)
+        if (window.OpsUI) OpsUI.start(appState.map);
     }
 }
 
@@ -2047,45 +1445,6 @@ const VILLAGE_CLIMATE = {
     'darbhanga': { baseTemp: 18.5, tempFluctuation: 0.4, baseSoil: 0.22, soilFluctuation: 0.008 },       // Bihar plains - winter cold
     'dhemaji': { baseTemp: 16.0, tempFluctuation: 0.5, baseSoil: 0.30, soilFluctuation: 0.006 }          // Assam - winter cool
 };
-
-// Track current values for smooth transitions
-let currentTempValues = {};
-let currentSoilValues = {};
-
-async function updateSyntheticData() {
-    const village = appState.data?.villages[appState.currentVillageId];
-    if (!village) return;
-
-    const villageId = appState.currentVillageId;
-    const coords = village.info.coordinates;
-
-    // Fetch REAL weather instead of synthetic base values
-    try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m&timezone=auto`;
-        const response = await fetch(url);
-        const weatherData = await response.json();
-
-        if (weatherData && weatherData.current) {
-            const temperature = weatherData.current.temperature_2m;
-            // Soil moisture is harder to get live for free, so we use a realistic stable value for Jan
-            const baseSoil = VILLAGE_CLIMATE[villageId]?.baseSoil || 0.35;
-            const soilMoisture = baseSoil + (Math.random() - 0.5) * 0.01;
-
-            // Update UI
-            const safeUpdate = (id, val) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = val;
-            };
-
-            safeUpdate('valTemp', `${temperature.toFixed(1)}°C`);
-            safeUpdate('valSoil', `${(soilMoisture * 100).toFixed(1)}%`);
-
-            console.log(`Live Weather Update [${villageId}]: ${temperature}°C`);
-        }
-    } catch (e) {
-        console.error("Live weather fetch failed, using fallback:", e);
-    }
-}
 
 // ============================================
 // Jal Drishti Decision Support Systems (DSS)
@@ -2165,12 +1524,11 @@ function toggleRescueMode() {
         [btnNavbar, btnLayer].forEach(btn => {
             if (btn) {
                 btn.classList.add('active');
-                btn.style.background = 'rgba(239, 68, 68, 0.3)';
-                btn.style.borderColor = '#ef4444';
+
             }
         });
-        if (btnNavbar) btnNavbar.innerHTML = '⛑️ RESCUE MODE ON';
-        if (btnLayer) btnLayer.innerHTML = '<span class="layer-icon">🛟</span> CLICK MAP TO SET LOCATION';
+        if (btnNavbar) btnNavbar.textContent = 'Rescue mode on';
+        if (btnLayer) btnLayer.textContent = 'Click the map to set a start point';
 
         // Change cursor
         if (appState.map) {
@@ -2190,8 +1548,8 @@ function toggleRescueMode() {
                 btn.style.borderColor = '';
             }
         });
-        if (btnNavbar) btnNavbar.innerHTML = '⛑️ RESCUE ME';
-        if (btnLayer) btnLayer.innerHTML = '<span class="layer-icon">🛟</span> Find Best Rescue Path';
+        if (btnNavbar) btnNavbar.textContent = 'Rescue me';
+        if (btnLayer) btnLayer.textContent = 'Plan evacuation route';
 
         if (appState.map) {
             appState.map.getCanvas().style.cursor = '';
@@ -2231,12 +1589,12 @@ async function handleRescueClick(e) {
 
             const summary = result.rescue_path.summary;
             showToast(
-                '✅ Safe Route Found!',
+                'Safe Route Found!',
                 `${summary.distance_km}km to ${summary.destination} (~${summary.estimated_time_min} min walk)`,
                 'info'
             );
         } else {
-            showToast('⚠️ No Safe Route', 'Area may be isolated. Seek highest available ground immediately!', 'error');
+            showToast('No Safe Route', 'Area may be isolated. Seek highest available ground immediately!', 'error');
         }
     } catch (e) {
         console.error('Rescue route calculation failed:', e);
@@ -2244,7 +1602,7 @@ async function handleRescueClick(e) {
         const fallback = await calculateClientSideRescueRoute(lng, lat);
         if (fallback.status === 'success') {
             drawRescuePath(fallback.rescue_path);
-            showToast('✅ Tactical Route Found', 'Using local fallback routing.', 'info');
+            showToast('Tactical Route Found', 'Using local fallback routing.', 'info');
         } else {
             showToast('Route Error', 'Could not determine safe passage.', 'error');
         }
@@ -2462,6 +1820,12 @@ function generateRiskGrid(bbox, gridSize) {
  * Estimate flood risk at a specific point using existing simulation functions
  */
 function estimateFloodRiskAtPoint(lng, lat, intensity, routingBbox = null) {
+    // Prefer the shallow-water simulation: risk from the deepest water the
+    // model expects at this point over the planning horizon.
+    if (window.FloodSim) {
+        const simRisk = FloodSim.riskAt(lng, lat, appState.riskHorizonH || 6);
+        if (simRisk !== null && simRisk !== undefined) return simRisk;
+    }
     const config = SIMULATION_CONFIG[appState.currentVillageId] || SIMULATION_CONFIG.wayanad_meppadi;
     const bbox = routingBbox || config.bbox || [76.0646, 11.4514, 76.2002, 11.6241];
 
@@ -2869,7 +2233,7 @@ function drawRescuePath(pathData) {
             type: 'symbol',
             source: 'rescue-start-source',
             layout: {
-                'text-field': '📍 YOU',
+                'text-field': 'Start',
                 'text-size': 11,
                 'text-offset': [0, -2],
                 'text-anchor': 'bottom',
@@ -2905,8 +2269,8 @@ function drawRescuePath(pathData) {
         });
 
         // Haven label
-        const typeIcons = { medical: '🏥', shelter: '🏠', security: '🚔', natural: '⛰️', elevated: '🏔️', relief: '⛺' };
-        const icon = typeIcons[haven.properties?.havenType] || '📌';
+        const typeIcons = {};
+        const icon = typeIcons[haven.properties?.havenType] || '';
         appState.map.addLayer({
             id: `rescue-haven-label-${idx}`,
             type: 'symbol',
@@ -2975,8 +2339,8 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
         const isSelected = idx === activeIndex;
         const riskColor = route.risk_level === 'HIGH' ? '#ef4444' : (route.risk_level === 'MEDIUM' ? '#f59e0b' : '#22c55e');
         const riskClass = route.risk_level === 'HIGH' ? 'risk-high' : (route.risk_level === 'MEDIUM' ? 'risk-medium' : '');
-        const typeIcons = { medical: '🏥', shelter: '🏠', security: '🚔', natural: '⛰️', elevated: '🏔️', relief: '⛺' };
-        const typeIcon = typeIcons[route.type] || '📍';
+        const typeIcons = {};
+        const typeIcon = '';
 
         cardsHtml += `
             <div class="rescue-route-card ${isSelected ? 'selected' : ''} ${isSelected ? riskClass : ''}" 
@@ -3005,8 +2369,8 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
                 </div>
                 ${isSelected ? `
                 <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-muted);">
-                    <span>🛡️ Safety: <strong style="color: ${riskColor}">${route.safety}</strong></span>
-                    <span>🚶 Walking pace ~3km/h</span>
+                    <span>Safety: <strong style="color: ${riskColor}">${route.safety}</strong></span>
+                    <span>Walking pace ~3 km/h</span>
                 </div>` : ''}
             </div>
         `;
@@ -3019,7 +2383,7 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
         panel.id = 'rescueInfoPanel';
         panel.className = 'glass-panel';
         panel.style.cssText = `
-            position: fixed; top: 90px; right: 356px; width: 340px;
+            position: fixed; top: 70px; right: 336px; width: 320px;
             z-index: 200; pointer-events: auto;
             border-left: 3px solid ${activeColor};
             animation: rescueSlideIn 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
@@ -3034,8 +2398,7 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
     panel.innerHTML = `
         <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:1.1rem;">🗺️</span>
-                <span>ROUTES</span>
+                                <span>ROUTES</span>
                 <span style="font-size: 0.6rem; padding: 2px 8px; background: rgba(255,255,255,0.06); border-radius: 10px; color: var(--text-muted); font-weight: 400; letter-spacing: 0;">${routes.length} found</span>
             </span>
             <button onclick="document.getElementById('rescueInfoPanel').style.display='none';"
@@ -3051,7 +2414,7 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
 
         <div style="margin-top: 10px; padding: 10px 12px; background: linear-gradient(135deg, ${activeColor}12, ${activeColor}06); border-radius: 8px; border: 1px solid ${activeColor}30;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <div style="font-size: 0.6rem; color: ${activeColor}; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">📍 SELECTED DESTINATION</div>
+                <div style="font-size: 0.6rem; color: ${activeColor}; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Selected destination</div>
             </div>
             <div style="font-size: 0.9rem; color: var(--text-primary); font-weight: 600;">${activeRoute.name}</div>
             <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px;">
@@ -3063,7 +2426,7 @@ function showRescueInfoPanel(pathData, activeIndex = 0) {
             <button onclick="document.getElementById('rescueInfoPanel').style.display='none'; toggleRescueMode();"
                 style="flex:1; padding: 8px; border: 1px solid rgba(239,68,68,0.25); background: rgba(239,68,68,0.08); color: #fca5a5; border-radius: 8px; cursor: pointer; font-size: 0.7rem; font-weight: 600; transition: all 0.2s;"
                 onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
-                ✕ CLEAR ALL
+                Clear routes
             </button>
         </div>
     `;
@@ -3462,7 +2825,7 @@ const SIMULATION_CONFIG = {
         runoffMultiplier: 1.8,
         flashFloodProne: true,
         riskFactors: ['Landslide Risk', 'Flash Flood', 'Debris Flow'],
-        hazardIcon: '⛰️',
+        hazardIcon: '',
         floodCharacteristic: 'Rapid valley accumulation with high-velocity runoff',
         evacuationAdvice: 'Move to higher ground immediately; avoid all valley floors',
         // Real bbox from OSM relation 11312337 (Meppadi Grama Panchayat, admin_level=8)
@@ -3476,7 +2839,7 @@ const SIMULATION_CONFIG = {
         runoffMultiplier: 0.9,
         embankmentBreachProne: true,
         riskFactors: ['River Overflow', 'Embankment Breach', 'Stagnant Water'],
-        hazardIcon: '🌊',
+        hazardIcon: '',
         floodCharacteristic: 'Linear channel spread with secondary drainage congestion',
         evacuationAdvice: 'Relocate to elevated community shelters; avoid embankments',
         // Real bbox from OSM relation 1568263 (Darbhanga District, admin_level=6)
@@ -3490,7 +2853,7 @@ const SIMULATION_CONFIG = {
         runoffMultiplier: 1.3,
         riverSwellProne: true,
         riskFactors: ['River Swell', 'Bank Erosion', 'Widespread Sheet Flooding'],
-        hazardIcon: '🏞️',
+        hazardIcon: '',
         floodCharacteristic: 'Extensive low-velocity sheet flooding across entire plains',
         evacuationAdvice: 'Move to raised platforms (Chang Ghars) or designated high ground',
         // Real bbox from OSM relation 2026407 (Dhemaji District, admin_level=6)
@@ -3744,7 +3107,7 @@ function handleDeepScan(feature, lngLat) {
     // Update city-specific info in the panel (if elements exist)
     const terrainTypeEl = document.getElementById('inspectTerrainType');
     if (terrainTypeEl) {
-        terrainTypeEl.textContent = `${config.hazardIcon} ${config.name}`;
+        terrainTypeEl.textContent = config.name;
     }
 
     const riskFactorsEl = document.getElementById('inspectRiskFactors');
@@ -4429,7 +3792,7 @@ const SAFE_HAVEN_DATA = {
 async function optimizeAllocation() {
     // 0. Verification: Optimization requires active rainfall simulation
     if (appState.rainfallAmount <= 0) {
-        showToast('Simulation Inactive', 'Turn on rainfall simulation to calculate requirements based on active risk grid.', 'warning');
+        showToast('No storm set', 'Set a storm total above zero to plan a deployment.', 'warning');
         return;
     }
 
@@ -4442,40 +3805,9 @@ async function optimizeAllocation() {
     if (btnStart) btnStart.style.display = 'none';
     if (btnStop) btnStop.style.display = 'block';
 
-    showToast('Optimization Started', 'Ranking zones by population, severity, model confidence and travel time...', 'info');
-
-    // Staged "solver running" progress (~6.5s total) rendered into the mission
-    // list container so the priority-dispatch engine below doesn't look like
-    // an instant/fake calculation. Mirrors the real stages the code actually
-    // runs through: demand scoring, confidence lookup, travel-time estimation,
-    // ranking, then greedy dispatch.
-    const SOLVER_STAGES = [
-        { pct: 12, label: 'Reading population-exposed zones...' },
-        { pct: 28, label: 'Scoring flood severity per zone...' },
-        { pct: 44, label: 'Pulling model confidence (XGBoost v2.1)...' },
-        { pct: 60, label: 'Estimating travel time to rescue hubs...' },
-        { pct: 76, label: 'Ranking priority scores...' },
-        { pct: 90, label: 'Running greedy dispatch solver...' },
-        { pct: 100, label: 'Finalizing deployment plan...' }
-    ];
-    const missionListEl = document.getElementById('deployment-missions');
-    if (missionListEl) {
-        missionListEl.innerHTML = `
-            <div class="optimization-progress">
-                <div class="optimization-progress-bar"><div class="optimization-progress-fill" id="optimizationProgressFill"></div></div>
-                <div class="optimization-progress-label" id="optimizationProgressLabel">Initializing solver<span class="spinner-dot">...</span></div>
-            </div>
-        `;
-    }
-    for (const stage of SOLVER_STAGES) {
-        if (!appState.isOptimizing) return; // Allow early stop
-        await new Promise(r => setTimeout(r, 850 + Math.random() * 150)); // ~6.5s total across 7 stages
-        const fill = document.getElementById('optimizationProgressFill');
-        const label = document.getElementById('optimizationProgressLabel');
-        if (fill) fill.style.width = `${stage.pct}%`;
-        if (label) label.innerHTML = `${stage.label}<span class="spinner-dot">...</span>`;
-    }
-    if (!appState.isOptimizing) return; // Allow early stop
+    // Plan against the worst water the simulation expects over the rest of the scenario.
+    appState.riskHorizonH = 24;
+    await new Promise(r => setTimeout(r, 0));
 
     const villageId = appState.currentVillageId;
     const centers = RESCUE_HUBS[villageId] || RESCUE_HUBS['wayanad_meppadi'];
@@ -4653,9 +3985,9 @@ async function optimizeAllocation() {
 
     // 5. MULTI-PHASE DEPLOYMENT SEQUENCING
     const deploymentPhases = {
-        phase1: { name: 'IMMEDIATE RESPONSE', timeframe: '0-4 hours', missions: [], color: '#ef4444', badge: '🔴' },
-        phase2: { name: 'SHORT-TERM RELIEF', timeframe: '4-12 hours', missions: [], color: '#f59e0b', badge: '🟡' },
-        phase3: { name: 'SUSTAINED OPERATIONS', timeframe: '12-24 hours', missions: [], color: '#22c55e', badge: '🟢' }
+        phase1: { name: 'IMMEDIATE RESPONSE', timeframe: '0-4 hours', missions: [], color: '#ef4444', badge: '' },
+        phase2: { name: 'SHORT-TERM RELIEF', timeframe: '4-12 hours', missions: [], color: '#f59e0b', badge: '' },
+        phase3: { name: 'SUSTAINED OPERATIONS', timeframe: '12-24 hours', missions: [], color: '#22c55e', badge: '' }
     };
 
     missions.forEach(m => {
@@ -4743,6 +4075,7 @@ async function optimizeAllocation() {
     // Cache the plan for deployment report generation
     appState.lastDeploymentPlan = plan;
 
+    appState.riskHorizonH = 6;
     appState.isOptimizing = false;
     resetOptimizationUI();
 
@@ -4757,6 +4090,7 @@ async function optimizeAllocation() {
  */
 function stopOptimization() {
     appState.isOptimizing = false;
+    appState.riskHorizonH = 6;
     resetOptimizationUI();
     const missionListEl = document.getElementById('deployment-missions');
     if (missionListEl) {
@@ -5064,32 +4398,32 @@ function generateDynamicRecommendations(allocations, intensity, villageId) {
     // Village-specific terrain alerts
     if (villageId === 'wayanad_meppadi') {
         if (intensity > 0.4) {
-            recs.push({ type: 'WARNING', message: '⛰️ LANDSLIDE ALERT: Chooralmala–Mundakkai corridor requires immediate aerial scanning. Ground routes may be severed.' });
+            recs.push({ type: 'WARNING', message: 'LANDSLIDE ALERT: Chooralmala–Mundakkai corridor requires immediate aerial scanning. Ground routes may be severed.' });
         }
         if (intensity > 0.7) {
-            recs.push({ type: 'CRITICAL', message: '🚁 Activate helicopter staging at Meppadi Hospital helipad. Valley floor evacuations require airlift.' });
+            recs.push({ type: 'CRITICAL', message: 'Activate helicopter staging at Meppadi Hospital helipad. Valley floor evacuations require airlift.' });
         }
         recs.push({ type: 'INFO', message: 'Hilly terrain prioritizes helicopter and medical kit deployment over ground vehicles.' });
     } else if (villageId === 'darbhanga') {
         if (intensity > 0.5) {
-            recs.push({ type: 'WARNING', message: '🌊 EMBANKMENT WATCH: Monitor Kamla river embankment breach points. Deploy sandbag teams to vulnerable sections.' });
+            recs.push({ type: 'WARNING', message: 'EMBANKMENT WATCH: Monitor Kamla river embankment breach points. Deploy sandbag teams to vulnerable sections.' });
         }
         if (intensity > 0.7) {
-            recs.push({ type: 'CRITICAL', message: '🚤 Activate all SDRF boat units. Stagnant water zones need water purification kits within 12 hours.' });
+            recs.push({ type: 'CRITICAL', message: 'Activate all SDRF boat units. Stagnant water zones need water purification kits within 12 hours.' });
         }
         recs.push({ type: 'INFO', message: 'Riverine terrain prioritizes boat deployment and community shelter activation.' });
     } else if (villageId === 'dhemaji') {
         if (intensity > 0.3) {
-            recs.push({ type: 'WARNING', message: '🏠 CHANG GHAR ALERT: Activate raised platform (Chang Ghar) network for immediate local sheltering across floodplain.' });
+            recs.push({ type: 'WARNING', message: 'CHANG GHAR ALERT: Activate raised platform (Chang Ghar) network for immediate local sheltering across floodplain.' });
         }
         if (intensity > 0.6) {
-            recs.push({ type: 'CRITICAL', message: '🏞️ BANK EROSION: Brahmaputra riverbank erosion may isolate Simen Chapori. Deploy Army boats for emergency linkage.' });
+            recs.push({ type: 'CRITICAL', message: 'BANK EROSION: Brahmaputra riverbank erosion may isolate Simen Chapori. Deploy Army boats for emergency linkage.' });
         }
         recs.push({ type: 'INFO', message: 'Floodplain terrain requires maximum boat fleet with aerial backup for isolated communities.' });
     }
 
     if (recs.filter(r => r.type === 'CRITICAL' || r.type === 'WARNING').length === 0) {
-        recs.push({ type: 'INFO', message: '✅ Resource distribution optimized for current conditions. All clusters covered.' });
+        recs.push({ type: 'INFO', message: 'Resource distribution optimized for current conditions. All clusters covered.' });
     }
 
     return recs;
@@ -5099,13 +4433,13 @@ function updateResourceStats(plan) {
     const container = document.getElementById('resource-coverage');
     if (!container) return;
 
-    const icons = { 'ambulances': '🚑', 'boats': '🚤', 'relief_kits': '📦', 'personnel': '👷' };
+    const icons = { 'ambulances': 'Amb', 'boats': 'Boat', 'relief_kits': 'Kits', 'personnel': 'Crew' };
 
     // 1. Update Coverage Stats
     container.innerHTML = Object.entries(plan.estimated_coverage).map(([res, cov]) => `
         <div class="coverage-card" style="background:rgba(255,255,255,0.05); padding:8px; border-radius:6px; margin-bottom:4px; border:1px solid rgba(255,255,255,0.1)">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="font-size:0.7rem; font-weight:600; text-transform:uppercase; color:var(--text-muted)">${icons[res] || '📌'} ${res}</span>
+                <span style="font-size:0.7rem; font-weight:600; text-transform:uppercase; color:var(--text-muted)">${String(res).replace(/_/g, ' ')}</span>
                 <span style="font-size:0.75rem; font-weight:700; color:var(--accent-primary)">${cov.percentage}%</span>
             </div>
             <div class="progress" style="height:6px; background:rgba(239, 68, 68, 0.45); box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.3);">
@@ -5128,7 +4462,7 @@ function updateResourceStats(plan) {
             missionContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.7rem;">No urgent missions required</div>';
         } else {
             const phaseBadgeColors = { 'Phase 1': '#ef4444', 'Phase 2': '#f59e0b', 'Phase 3': '#22c55e' };
-            const phaseIcons = { 'Phase 1': '🔴', 'Phase 2': '🟡', 'Phase 3': '🟢' };
+            const phaseIcons = { 'Phase 1': '', 'Phase 2': '', 'Phase 3': '' };
 
             missionContainer.innerHTML = missions.map(m => {
                 const resDetails = Object.keys(icons).map(res => {
@@ -5145,7 +4479,7 @@ function updateResourceStats(plan) {
 
                 const phase = m.phase || 'Phase 3';
                 const pColor = phaseBadgeColors[phase] || '#22c55e';
-                const pIcon = phaseIcons[phase] || '🟢';
+                const pIcon = '';
 
                 return `
                     <div class="mission-card" style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; border-left:3px solid ${pColor};" onclick="focusOnMission([${m.coords}])">
@@ -5159,7 +4493,7 @@ function updateResourceStats(plan) {
                                 <div style="font-size:0.6rem; color:var(--accent-secondary)">Hub: ${m.hub_name}</div>
                             </div>
                             <div style="text-align:right">
-                                <div class="priority-score-pill">⚡ ${(m.priority_score || 0).toLocaleString()}</div>
+                                <div class="priority-score-pill">${(m.priority_score || 0).toLocaleString()}</div>
                                 <div style="font-size:0.55rem; color:var(--text-muted); margin-top:3px;">Pop: ${m.pop.toLocaleString()}</div>
                             </div>
                         </div>

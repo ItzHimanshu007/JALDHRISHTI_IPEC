@@ -4,366 +4,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jal Drishti - Mission Control</title>
-    <!-- MapLibre -->
+    <title>Jal Drishti · Flood Operations</title>
     <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
-    <!-- Bench/Font -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;600&display=swap"
-        rel="stylesheet">
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/styles.css?v=4.2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/ops.css?v=1.0">
 </head>
 
 <body>
-    <!-- 1. The Map (Background) -->
     <div id="map"></div>
 
-    <!-- 2. Floating HUD Interface -->
-    <div class="hud-container">
+    <div class="hud-container" id="hud">
 
-        <!-- Header -->
-        <div class="hud-header pointer-events-auto">
-            <div class="brand">Jal Drishti
-                <div class="scan-line"></div>
+        <!-- Top bar -->
+        <header class="topbar">
+            <div class="topbar__brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <span class="brand-name">Jal Drishti</span>
+                <span class="brand-sub">Flood Operations</span>
             </div>
-            <div class="nav-links" id="main-nav-links">
-                <!-- Populated by nav.js: shows every other page's link, never the current one -->
-            </div>
-            <div class="system-status">
-            </div>
-        </div>
 
-        <!-- Left Command Panel -->
-        <div class="hud-left pointer-events-auto">
-            <!-- Location Selector -->
-            <div class="glass-panel">
-                <div class="panel-header">
-                    LOCATION
+            <div class="topbar__location">
+                <label class="sr-only" for="villageSelector">Area</label>
+                <select id="villageSelector">
+                    <option value="wayanad_meppadi">Meppadi, Wayanad</option>
+                    <option value="darbhanga">Darbhanga, Bihar</option>
+                    <option value="dhemaji">Dhemaji, Assam</option>
+                </select>
+                <div id="villageInfo" class="topbar__meta"><span>--</span></div>
+            </div>
+
+            <div class="topbar__scenario">
+                <span class="tag" id="opsFloodType">--</span>
+                <span class="tag tag--muted" title="Terrain is real (SRTM). Rainfall, river flows and failure timings are synthetic.">Synthetic scenario</span>
+            </div>
+
+            <div class="topbar__clock">
+                <div class="clock-block">
+                    <span class="clock-label">Scenario time</span>
+                    <span class="clock-value mono" id="opsClockT">T+00:00</span>
                 </div>
-
-                <div class="location-select-row">
-                    <span class="location-pin" aria-hidden="true">📍</span>
-                    <select id="villageSelector">
-                        <option value="wayanad_meppadi">Meppadi (Kerala)</option>
-                        <option value="darbhanga">Darbhanga (Bihar)</option>
-                        <option value="dhemaji">Dhemaji (Assam)</option>
-                    </select>
+                <div class="clock-block">
+                    <span class="clock-label">Local</span>
+                    <span class="clock-value mono" id="opsClockLocal">--:--</span>
                 </div>
-                <div id="villageInfo" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px;">
-                    <span style="font-size:0.7rem; color:var(--text-muted);">--</span>
-                    <button id="btnGenerateReport" class="action-btn"
-                        style="width:auto; margin:0; padding:6px 12px; font-size:0.65rem; background:linear-gradient(135deg, rgba(34, 211, 238, 0.35) 0%, rgba(59, 130, 246, 0.25) 100%); border-color:rgba(34, 211, 238, 0.4);">
-                        📥 Download Report
+                <div class="alert-chip" id="opsAlert" data-level="green">
+                    <span class="alert-chip__label">Alert</span>
+                    <span class="alert-chip__value" id="opsAlertText">Green</span>
+                </div>
+            </div>
+
+            <nav class="topbar__actions">
+                <button id="btnGenerateReport" class="btn btn--ghost" type="button">Export report</button>
+                <div class="nav-links" id="main-nav-links"></div>
+                <button id="btnHidePanels" class="btn btn--ghost" type="button" title="Hide panels (H)">Map only</button>
+            </nav>
+        </header>
+
+        <!-- Left column -->
+        <aside class="col col--left">
+            <section class="panel" id="opsSituation">
+                <div class="panel__head">
+                    <h2>Situation</h2>
+                    <span class="panel__meta mono" id="opsComputeState">starting model…</span>
+                </div>
+                <p class="scenario-note" id="opsScenarioNote"></p>
+                <div class="kpi-grid" id="opsKpis"></div>
+            </section>
+
+            <section class="panel" id="opsGaugePanel">
+                <div class="panel__head">
+                    <h2 id="opsGaugeTitle">Gauge</h2>
+                    <span class="panel__meta mono" id="opsGaugeValue">--</span>
+                </div>
+                <canvas id="opsGaugeChart" class="gauge-chart" height="150"></canvas>
+                <div class="chart-legend" id="opsGaugeLegend"></div>
+            </section>
+
+            <section class="panel panel--grow" id="resourceAllocationPanel">
+                <div class="panel__head">
+                    <h2>Resource allocation</h2>
+                    <span class="panel__meta">next 24 h</span>
+                </div>
+                <div class="resource-stats-grid" id="resource-coverage"></div>
+                <div class="subhead">Deployment schedule</div>
+                <div id="deployment-missions" class="scroll-list">
+                    <div class="empty-note">Ranks boats, ambulances, kits and teams against the settlements the model
+                        expects to flood, by people exposed, depth and travel time from each hub.</div>
+                </div>
+                <div class="btn-row">
+                    <button id="btnStartOptimization" class="btn btn--primary" type="button" onclick="optimizeAllocation()">Plan deployment</button>
+                    <button id="btnStopOptimization" class="btn btn--danger" type="button" style="display:none;" onclick="stopOptimization()">Stop</button>
+                    <button id="btnDownloadDeploymentReport" class="btn btn--ghost" type="button" onclick="generateDeploymentReport()">Download plan</button>
+                </div>
+                <div id="deployment-phase-summary" class="phase-list"></div>
+                <div id="deployment-recommendations"></div>
+            </section>
+        </aside>
+
+        <!-- Right column -->
+        <aside class="col col--right">
+            <section class="panel" id="opsLayers">
+                <div class="panel__head">
+                    <h2>Map layers</h2>
+                </div>
+                <div class="layer-list">
+                    <button class="layer-row active" id="layerWater" type="button" data-layer="water">
+                        <span class="switch"></span><span class="layer-row__name">Simulated floodwater</span>
                     </button>
-                </div>
-            </div>
-
-            <!-- Current Weather Conditions -->
-            <div class="glass-panel weather-conditions-panel" id="currentConditionsPanel">
-                <div class="panel-header">
-                    CURRENT CONDITIONS
-                    <span class="panel-subtitle" id="weatherUpdatedAt">--:--</span>
-                </div>
-
-                <div class="weather-primary-row">
-                    <div class="weather-icon-large" id="weatherIcon">☀️</div>
-                    <div class="weather-primary-info">
-                        <div class="weather-temp" id="weatherTemp">--°C</div>
-                        <div class="weather-desc" id="weatherDesc">Loading...</div>
-                    </div>
-                </div>
-
-                <div class="weather-rain-highlight" id="weatherRainRow">
-                    <span class="weather-rain-icon" aria-hidden="true">💧</span>
-                    <div class="weather-rain-values">
-                        <span class="weather-rain-amount" id="weatherRain">0.0</span>
-                        <span class="weather-rain-unit">mm/hr</span>
-                    </div>
-                    <span class="weather-rain-label">RAINFALL</span>
-                </div>
-
-                <div class="weather-stats-row">
-                    <div class="weather-stat">
-                        <span class="weather-stat-icon" aria-hidden="true">💦</span>
-                        <span class="weather-stat-value" id="weatherHum">--%</span>
-                        <span class="weather-stat-label">Humidity</span>
-                    </div>
-                    <div class="weather-stat">
-                        <span class="weather-stat-icon" aria-hidden="true">💨</span>
-                        <span class="weather-stat-value" id="weatherWind">-- km/h</span>
-                        <span class="weather-stat-label">Wind</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Resource Allocation Panel -->
-            <div class="glass-panel" id="resourceAllocationPanel"
-                style="border-left: 3px solid var(--accent-tertiary);">
-                <div class="panel-header">
-                    <span style="display:flex; align-items:center; gap:8px;">
-                        <span class="layer-icon">🎯</span> RESOURCE ALLOCATION
-                    </span>
-                    <span class="model-version">PRIORITY-RANKED</span>
-                </div>
-
-                <div class="resource-stats-grid" id="resource-coverage">
-                    <!-- Populated by JS -->
-                </div>
-
-                <div class="mission-control-section" style="margin-top:16px;">
-                    <div class="label-tiny" style="color:var(--accent-primary); letter-spacing:1px; margin-bottom:8px;">
-                        ACTIVE DEPLOYMENT SCHEDULE</div>
-                    <div id="deployment-missions" class="scroll-container"
-                        style="max-height:220px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:5px;">
-                        <!-- Mission cards / solver progress populated by JS -->
-                        <div style="text-align:center; padding:18px 10px; color:var(--text-muted); font-size:0.65rem; line-height:1.5;">
-                            Ranks rescue assets against flood-exposed zones by population,
-                            severity, model confidence and travel time.<br>Requires an active
-                            rainfall simulation.
+                    <div class="water-legend" id="waterLegend">
+                        <div class="seg" id="waterStyle">
+                            <button type="button" data-style="natural" class="active">Natural</button>
+                            <button type="button" data-style="depth">Depth classes</button>
+                        </div>
+                        <div class="legend-bar legend-bar--natural" id="legendNatural">
+                            <div class="legend-ramp"><span style="background:#60aac4"></span><span style="background:#27608a"></span><span style="background:#10385e"></span></div>
+                            <div class="legend-ramp"><span style="background:#a88a5c"></span><span style="background:#7e5f3c"></span><span style="background:#5c442a"></span></div>
+                            <div class="legend-labels"><span>shallow</span><span>clear / silt-laden</span><span>deep</span></div>
+                        </div>
+                        <div class="legend-bar" id="legendDepth" hidden>
+                            <div class="legend-ramp legend-ramp--classes"><span style="background:#aadcf5"></span><span style="background:#64b4eb"></span><span style="background:#2d82d7"></span><span style="background:#1950b4"></span><span style="background:#1e2882"></span></div>
+                            <div class="legend-labels"><span>0.15</span><span>0.5</span><span>1</span><span>2 m</span><span>&gt;2</span></div>
                         </div>
                     </div>
-                </div>
-
-                <div class="optimization-controls" style="display:flex; gap:8px; margin-top:12px;">
-                    <button id="btnStartOptimization" class="action-btn"
-                        style="flex:1; background:linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(139, 92, 246, 0.2) 100%); border-color:rgba(139, 92, 246, 0.5);"
-                        onclick="optimizeAllocation()">
-                        ⚡ START OPTIMIZATION
+                    <button class="layer-row active" id="layerFlow" type="button" data-layer="flow">
+                        <span class="switch"></span><span class="layer-row__name">Flow direction</span>
                     </button>
-                    <button id="btnStopOptimization" class="action-btn"
-                        style="flex:1; display:none; background:linear-gradient(135deg, rgba(239, 68, 68, 0.4) 0%, rgba(239, 68, 68, 0.2) 100%); border-color:rgba(239, 68, 68, 0.5); color:#fca5a5;"
-                        onclick="stopOptimization()">
-                        🛑 STOP
+                    <button class="layer-row active" id="layerRain" type="button" data-layer="rain">
+                        <span class="switch"></span><span class="layer-row__name">Rain overlay</span>
                     </button>
-                </div>
-
-                <!-- Deployment Report Download -->
-                <button id="btnDownloadDeploymentReport" class="action-btn"
-                    style="width:100%; margin-top:8px; background:linear-gradient(135deg, rgba(34, 211, 238, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%); border-color:rgba(34, 211, 238, 0.4);"
-                    onclick="generateDeploymentReport()">
-                    📋 DOWNLOAD DEPLOYMENT REPORT
-                </button>
-
-                <!-- Phase Summary -->
-                <div id="deployment-phase-summary" style="display:flex; flex-direction:column; gap:4px; margin-top:12px;">
-                    <!-- Populated by JS after optimization -->
-                </div>
-
-                <div id="deployment-recommendations" style="margin-top:12px;">
-                    <!-- Alerts populated by JS -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Command Panel -->
-        <div class="hud-right pointer-events-auto">
-
-            <!-- Deep Scan Inspector -->
-            <div id="cellInspector" class="glass-panel"
-                style="display:none; border-left: 3px solid var(--accent-primary); position: relative; overflow: hidden;">
-                <div class="scanning-indicator"></div>
-                <div class="panel-header">
-                    <span style="display:flex; align-items:center; gap:8px;">
-                        <span class="layer-icon">🔍</span> Location Details
-                    </span>
-                    <button onclick="closeInspector()"
-                        style="border:none; background:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">✕</button>
-                </div>
-
-                <div id="inspectTerrainType"
-                    style="font-family: var(--font-tech); font-size: 0.9rem; color: var(--accent-secondary); margin-bottom: 12px; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
-                    --</div>
-
-                <div class="inspector-grid">
-                    <div class="inspector-item">
-                        <div class="label-tiny">ELEVATION</div>
-                        <div class="val-mono" id="inspectElev">--</div>
-                    </div>
-                    <div class="inspector-item">
-                        <div class="label-tiny">WATER DEPTH</div>
-                        <div class="val-mono" id="inspectDepth">--</div>
-                    </div>
-                    <div class="inspector-item">
-                        <div class="label-tiny">POPULATION AT RISK</div>
-                        <div class="val-mono" id="inspectPopAtRisk" style="color: #f97316;">--</div>
-                    </div>
-                    <div class="inspector-item">
-                        <div class="label-tiny">DENSITY</div>
-                        <div class="val-mono" id="inspectDensity">--</div>
-                    </div>
-                </div>
-
-                <div
-                    style="margin-top:15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                    <div class="label-tiny">RISK ASSESSMENT</div>
-                    <div id="inspectRisk"
-                        style="font-size:1.3rem; font-weight:700; color:var(--text-muted); letter-spacing:1px; margin: 4px 0;">
-                        SCANNING...</div>
-                    <div class="risk-bar"
-                        style="height:6px; width:100%; background:#1e293b; margin-top:8px; border-radius:10px; position:relative; overflow: hidden;">
-                        <div class="risk-marker"
-                            style="position:absolute; width:100%; height:100%; background:var(--accent-primary); left:-100%; transition:left 0.5s cubic-bezier(0.4, 0, 0.2, 1);">
-                        </div>
-                    </div>
-                </div>
-
-                <div id="inspectRiskFactors" style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;"></div>
-
-                <div id="inspectEvacuation"
-                    style="margin-top:12px; padding:10px; background:rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.2); border-left:3px solid #ef4444; font-size:0.75rem; color: #fca5a5; display:none; line-height: 1.4;">
-                    --
-                </div>
-            </div>
-
-            <!-- Layer Controls -->
-            <div class="glass-panel">
-                <div class="panel-header">
-                    <span style="display:flex; align-items:center; gap:8px;">
-                        <span class="layer-icon">🗺️</span> Map Layers
-                    </span>
-                    <button id="exitFocusModeBtn" class="focus-exit-btn" type="button"
-                        title="Show the full dashboard again">✕ Show Dashboard</button>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-
-                    <button id="btnFindRescue" class="layer-btn" onclick="toggleRescueMode()">
-                        <span class="layer-icon">🛟</span> Find Best Rescue Path
+                    <button class="layer-row active" id="layerSlope" type="button" data-layer="slope">
+                        <span class="switch"></span><span class="layer-row__name">Unstable slopes (FS &lt; 1)</span>
                     </button>
-                    <button id="btnLayerRisk" class="layer-btn active"
+                    <button id="btnLayerRisk" class="layer-row layer-btn" type="button"
                         onclick="setupLayerToggle('btnLayerRisk', 'flood-risk-layer')">
-                        <span class="layer-icon">🌊</span> Flood Risk Grid
+                        <span class="switch"></span><span class="layer-row__name">Risk index grid</span>
                     </button>
-                    <button id="btnLayerPopHeatmap" class="layer-btn" onclick="togglePopulationHeatmap()">
-                        <span class="layer-icon">🔥</span> Population Heatmap
+                    <button id="btnLayerPopHeatmap" class="layer-row layer-btn" type="button" onclick="togglePopulationHeatmap()">
+                        <span class="switch"></span><span class="layer-row__name">Population density</span>
                     </button>
+                    <div id="heatmapLegend" class="legend-bar" style="display:none;">
+                        <div class="legend-ramp legend-ramp--heat"></div>
+                        <div class="legend-labels"><span>low</span><span>people / km²</span><span>high</span></div>
+                    </div>
                 </div>
+                <button id="btnFindRescue" class="btn btn--block" type="button" onclick="toggleRescueMode()">Plan evacuation route</button>
+            </section>
 
-                <!-- Heatmap Legend (Hidden by default) -->
-                <div id="heatmapLegend"
-                    style="display:none; margin-top:12px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">
-                        POPULATION DENSITY</div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div
-                            style="width:100%; height:12px; border-radius:6px; background: linear-gradient(to right, rgba(0,255,0,0.8), rgba(255,255,0,0.9), rgba(255,100,0,1), rgba(230,0,0,1));">
-                        </div>
+            <!-- Clicked-cell readout from the simulation -->
+            <section class="panel" id="simInspector" hidden>
+                <div class="panel__head">
+                    <h2>Point readout</h2>
+                    <button class="icon-btn" type="button" id="simInspectorClose" aria-label="Close">&times;</button>
+                </div>
+                <div id="simInspectorBody"></div>
+            </section>
+
+            <!-- Risk-grid cell readout (legacy index layer) -->
+            <section id="cellInspector" class="panel" style="display:none;">
+                <div class="panel__head">
+                    <h2>Risk index cell</h2>
+                    <button class="icon-btn" type="button" onclick="closeInspector()" aria-label="Close">&times;</button>
+                </div>
+                <div id="inspectTerrainType" class="subhead">--</div>
+                <dl class="readout">
+                    <dt>Elevation</dt><dd class="mono" id="inspectElev">--</dd>
+                    <dt>Index depth</dt><dd class="mono" id="inspectDepth">--</dd>
+                    <dt>Population at risk</dt><dd class="mono" id="inspectPopAtRisk">--</dd>
+                    <dt>Density</dt><dd class="mono" id="inspectDensity">--</dd>
+                    <dt>Risk class</dt><dd class="mono" id="inspectRisk">--</dd>
+                </dl>
+                <div class="risk-bar"><div class="risk-marker"></div></div>
+                <div id="inspectRiskFactors" class="chip-row"></div>
+                <div id="inspectEvacuation" class="callout callout--red" style="display:none;">--</div>
+            </section>
+
+            <section class="panel panel--grow" id="opsEventsPanel">
+                <div class="panel__head">
+                    <h2>Event log</h2>
+                    <span class="panel__meta" id="opsEventCount">--</span>
+                </div>
+                <div id="opsUpcoming" class="upcoming"></div>
+                <ol id="opsLog" class="event-log"></ol>
+            </section>
+
+            <section class="panel" id="opsExposurePanel">
+                <div class="panel__head">
+                    <div class="seg seg--tabs" id="opsExposureTabs">
+                        <button type="button" data-tab="settlements" class="active">Settlements</button>
+                        <button type="button" data-tab="facilities">Facilities</button>
                     </div>
-                    <div
-                        style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-muted); margin-top:4px;">
-                        <span>Low</span>
-                        <span>Medium</span>
-                        <span>High</span>
-                        <span>Critical</span>
-                    </div>
-                    <div style="font-size:0.6rem; color:var(--accent-secondary); margin-top:8px; line-height:1.3;">
-                        🔴 Red zones require immediate evacuation priority
-                    </div>
+                </div>
+                <div id="opsSettlements" class="exposure-list"></div>
+                <div id="opsFacilities" class="exposure-list" hidden></div>
+            </section>
+        </aside>
+
+        <!-- Scenario player -->
+        <footer class="player" id="opsPlayer">
+            <button class="play-btn" id="masterPlayBtn" type="button" aria-label="Play">
+                <svg viewBox="0 0 16 16" class="icon-play"><path d="M4 2.5v11l9-5.5z" /></svg>
+                <svg viewBox="0 0 16 16" class="icon-pause"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" /></svg>
+            </button>
+            <div class="seg seg--small" id="opsSpeed" title="Playback speed">
+                <button type="button" data-speed="900">¼ h/s</button>
+                <button type="button" data-speed="3600" class="active">1 h/s</button>
+                <button type="button" data-speed="10800">3 h/s</button>
+            </div>
+            <div class="timeline">
+                <canvas id="opsTimeline" height="46"></canvas>
+                <div class="timeline__axis mono" id="opsTimelineAxis"></div>
+            </div>
+            <div class="storm">
+                <div class="storm__row">
+                    <label for="rainfallSlider">Storm total, 24 h</label>
+                    <span class="mono" id="rainfallValue">200 mm</span>
+                </div>
+                <input type="range" id="rainfallSlider" min="40" max="350" step="10" value="200">
+                <div class="seg seg--small" id="stormPresets">
+                    <button type="button" data-mm="100">Moderate</button>
+                    <button type="button" data-mm="200" class="active">Heavy</button>
+                    <button type="button" data-mm="300">Extreme</button>
                 </div>
             </div>
-
-        </div>
-
-        <!-- Weather & Time Control -->
-        <div class="hud-bottom pointer-events-auto">
-
-            <!-- Day Selector + Hourly Timeline -->
-            <div class="weather-time-panel glass-panel" id="weatherTimePanel">
-                <div class="day-selector" id="daySelector"></div>
-                <div class="hourly-scroll">
-                    <div class="hourly-timeline" id="hourlyTimeline"></div>
-                </div>
-            </div>
-
-            <!-- Toggle for the Day Selector + Hourly Timeline panel above, sitting
-                 outside the player bar to its left (mirrors where it used to sit
-                 outside the bar on the right). -->
-            <div class="bottom-control-row">
-                <button class="forecast-toggle-btn active" id="forecastToggleBtn" type="button"
-                    aria-expanded="true" aria-controls="weatherTimePanel" aria-label="Toggle live forecast panel">
-                    <span class="status-dot live"></span>
-                    <span class="forecast-toggle-label">LIVE FORECAST</span>
-                    <span class="forecast-toggle-icon">▾</span>
-                </button>
-
-                <!-- Simulation Player (rainfall input + auto-play; retained from the existing flood engine) -->
-                <div class="player-bar">
-                    <button class="play-btn-circle" id="masterPlayBtn">▶</button>
-
-                    <!-- Rainfall Input -->
-                    <div class="rainfall-control">
-                        <div class="control-label">RAINFALL INPUT</div>
-                        <div class="control-wrapper">
-                            <input type="range" id="rainfallSlider" min="0" max="300" value="50">
-                            <span id="rainfallValue">50 mm</span>
-                        </div>
-                    </div>
-
-                    <!-- Time-selecting section (original flood-simulation scrubber, restored as-is) -->
-                    <div class="simulation-meta">
-                        <div class="meta-header">
-                            <span class="meta-label">FLOOD SIMULATION</span>
-                            <span id="timeDisplay">+0h</span>
-                        </div>
-                        <div class="timeline-track">
-                            <div class="timeline-fill" id="timelineFill"></div>
-                        </div>
-                        <div class="timeline-ticks">
-                            <div class="tick active" data-t="0">START</div>
-                            <div class="tick" data-t="1">+4h</div>
-                            <div class="tick" data-t="2">+8h</div>
-                            <div class="tick" data-t="3">+12h</div>
-                            <div class="tick" data-t="4">+16h</div>
-                            <div class="tick" data-t="5">+20h</div>
-                            <div class="tick" data-t="6">24h</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Simulation Report Panel (Hidden by default) -->
-            <div id="simulationReport" class="glass-panel" style="display:none; margin-top:10px; padding:15px;">
-                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>📊 Simulation Report</span>
-                    <button id="closeReport"
-                        style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem;">✕</button>
-                </div>
-                <div id="reportContent" style="margin-top:10px; font-size:0.8rem; line-height:1.6;"></div>
-            </div>
-        </div>
-
+        </footer>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay">
-        <div style="text-align: center;">
-            <div
-                style="font-family: var(--font-tech, 'Rajdhani', sans-serif); font-size: 1.5rem; color: #22d3ee; margin-bottom: 10px;">
-                Jal Drishti</div>
-            <div style="font-size: 0.9rem; color: #94a3b8;">Initializing Mission Control...</div>
-            <div
-                style="margin-top: 20px; width: 40px; height: 40px; border: 3px solid rgba(34, 211, 238, 0.3); border-top-color: #22d3ee; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;">
-            </div>
+        <div class="loading-box">
+            <div class="brand-name">Jal Drishti</div>
+            <div class="loading-text">Loading terrain and map…</div>
         </div>
     </div>
-    <style>
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
 
     <script src="js/nav.js?v=1.0"></script>
     <script src="js/voice-settings.js?v=1.0"></script>
     <script src="js/reports-store.js?v=1.0"></script>
     <script src="js/voice-service.js?v=1.0"></script>
-    <script src="js/enhanced.js?v=3.9"></script>
-    <script src="js/weather-time-panel.js?v=1.6"></script>
+    <script src="js/flood-scenarios.js?v=1.0"></script>
+    <script src="js/flood-sim-solver.js?v=1.0"></script>
+    <script src="js/flood-sim.js?v=1.0"></script>
+    <script src="js/flood-render.js?v=1.0"></script>
+    <script src="js/enhanced.js?v=4.0"></script>
+    <script src="js/ops-ui.js?v=1.0"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            JalDrishtiNav.renderNav('#main-nav-links', 'dashboard');
+            JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');
         });
     </script>
 </body>
