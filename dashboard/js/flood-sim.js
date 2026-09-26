@@ -194,6 +194,10 @@
     function onSolverMessage(m) {
         if (!m || m.runId !== state.runId) return;
         if (m.type === 'frame') {
+            // running maximum depth up to this frame (for the drained-flood trace on the map)
+            const prev = m.k > 0 ? state.frames[m.k - 1] : null;
+            m.peak = new Uint16Array(m.depth.length);
+            for (let i = 0; i < m.depth.length; i++) m.peak[i] = prev && prev.peak && prev.peak[i] > m.depth[i] ? prev.peak[i] : m.depth[i];
             state.frames[m.k] = m;
             state.derived[m.k] = deriveFrame(m);
             detectEvents(m.k);

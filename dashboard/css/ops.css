@@ -397,3 +397,6 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .maplibregl-ctrl-group button { width: 30px; height: 30px; }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--line-2) !important; }
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.85); }
+
+.legend-labels--left { justify-content: flex-start; gap: 12px; margin-top: 4px; }
+.legend-labels .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }

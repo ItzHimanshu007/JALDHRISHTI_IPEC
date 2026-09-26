@@ -223,8 +223,13 @@
         const chanCells = opts.channelKm2 / t.cellKm2;
         for (let i = 0; i < N; i++) {
             const chan = smoothstep(chanCells * 0.5, chanCells * 2, t.acc[i]);
-            manning[i] = opts.nLand * (1 - chan) + opts.nChannel * chan;
-            infilMul[i] = 1 - 0.7 * chan;
+            // Terrain-dependent land surface: steep (forested / plantation)
+            // hillsides are rough and slow runoff down; their soils are thin and
+            // fill quickly, while valley floors and plains soak in more.
+            const steep = smoothstep(8, 32, t.slope[i]);
+            const nLand = opts.nLand + 0.05 * steep;
+            manning[i] = nLand * (1 - chan) + opts.nChannel * chan;
+            infilMul[i] = (1 - 0.7 * chan) * (1 - 0.45 * steep);
         }
         for (const u of (opts.urban || [])) {
             for (let i = 0; i < N; i++) {

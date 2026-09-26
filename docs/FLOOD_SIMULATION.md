@@ -41,6 +41,18 @@ in the player bar.
 Population per cell comes from the dashboard's density model (district census
 density plus named settlements); permanent river channels hold no residents.
 
+## Terrain-aware physics and rendering
+
+- Steep (forested / plantation) hillsides get higher Manning roughness and
+  thinner soils (less infiltration), valley floors and plains soak in more.
+- Rendering draws water as seen from above: shallow water murky with the
+  ground showing through, deeper water slate blue, silt-laden where river,
+  breach or debris water carried it; the water surface is lit by the sun over
+  the terrain; calm water has a soft sky sheen, fast water in steep channels
+  breaks white. Thin runoff sheets on hillsides are not drawn (only water
+  gathered into gullies and streams), and land that flooded and drained keeps
+  a faint silt stain.
+
 ## Checks
 
 Each run reports a mass balance (rain + inflow = losses + boundary outflow +
