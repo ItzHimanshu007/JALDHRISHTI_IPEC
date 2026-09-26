@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Jal Drishti</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css?v=4.2">
+</head>
+
+<body class="settings-page">
+    <div class="hud-container settings-hud-container">
+
+        <!-- Header (identical to the Dashboard's) -->
+        <div class="hud-header pointer-events-auto">
+            <div class="brand">Jal Drishti
+                <div class="scan-line"></div>
+            </div>
+            <div class="nav-links" id="main-nav-links">
+                <!-- Populated by nav.js -->
+            </div>
+            <div class="system-status"></div>
+        </div>
+
+        <!-- Settings Content -->
+        <div class="settings-content pointer-events-auto">
+            <h1 class="settings-title">Settings</h1>
+            <p class="settings-subtitle">Voice output preferences and your generated reports.</p>
+
+            <!-- Sarvam AI Language Section -->
+            <div class="glass-panel settings-section">
+                <div class="panel-header">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="layer-icon">🗣️</span> VOICE LANGUAGE
+                    </span>
+                </div>
+                <p class="settings-help-text">
+                    Choose the language Jal Drishti should use whenever it reads something aloud -
+                    report summaries and simulation-grid readouts. Powered by Sarvam AI.
+                </p>
+                <label class="settings-label" for="voiceLanguageSelect">Select Language</label>
+                <select id="voiceLanguageSelect" class="jd-select">
+                    <!-- Populated by settings-page.js from VoiceSettings.getLanguages() -->
+                </select>
+                <div id="voiceLanguageStatus" class="settings-help-text" style="margin-top:8px;"></div>
+            </div>
+
+            <!-- Reports Section -->
+            <div class="glass-panel settings-section">
+                <div class="panel-header">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="layer-icon">📄</span> REPORTS
+                    </span>
+                </div>
+                <p class="settings-help-text">
+                    Reports you've already generated from the Dashboard (Flood Risk Reports and
+                    Tactical Deployment Reports). Select one to have it read aloud.
+                </p>
+
+                <div id="reportsEmptyState" class="reports-empty-state" hidden>
+                    No reports yet. Generate one from the Dashboard (Download Report, or Download
+                    Deployment Report after running Resource Allocation) and it will appear here.
+                </div>
+
+                <div id="reportsList" class="reports-list"></div>
+
+                <div class="reports-actions-row">
+                    <button id="btnListenToReport" class="action-btn listen-btn" disabled>
+                        ▶ Listen to Report
+                    </button>
+                    <button id="btnGenerateNarrative" class="action-btn narrative-btn" disabled>
+                        ✨ Generate AI Narrative
+                    </button>
+                </div>
+
+                <!-- AI Narrative panel - only shown once a narrative has been
+                     generated for the selected report. The original
+                     deterministic report (above) is never replaced by this. -->
+                <div id="narrativePanel" class="narrative-panel" hidden>
+                    <div class="narrative-panel-header">
+                        <span>✨ AI Narrative <span id="narrativeModelBadge" class="narrative-model-badge"></span></span>
+                        <button id="btnListenToNarrative" class="action-btn listen-btn" style="width:auto; padding:6px 12px; font-size:0.65rem;">
+                            🔊 Listen
+                        </button>
+                    </div>
+                    <div id="narrativeValidationWarning" class="narrative-warning" hidden></div>
+                    <p id="narrativeText" class="narrative-text"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/nav.js?v=1.0"></script>
+    <script src="js/voice-settings.js?v=1.0"></script>
+    <script src="js/reports-store.js?v=1.0"></script>
+    <script src="js/voice-service.js?v=1.0"></script>
+    <script src="js/narrative-service.js?v=1.0"></script>
+    <script src="js/settings-page.js?v=1.2"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            JalDrishtiNav.renderNav('#main-nav-links', 'settings');
+        });
+    </script>
+</body>
+
+</html>

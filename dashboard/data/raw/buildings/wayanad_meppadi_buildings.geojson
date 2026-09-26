@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "name": "wayanad_meppadi_buildings",
+  "features": [
+    { "type": "Feature", "properties": { "id": "B001", "type": "residential", "floors": 2, "area_sqm": 120 }, "geometry": { "type": "Point", "coordinates": [76.132, 11.553] } },
+    { "type": "Feature", "properties": { "id": "B002", "type": "residential", "floors": 1, "area_sqm": 85 }, "geometry": { "type": "Point", "coordinates": [76.135, 11.555] } },
+    { "type": "Feature", "properties": { "id": "B003", "type": "commercial", "floors": 3, "area_sqm": 250 }, "geometry": { "type": "Point", "coordinates": [76.137, 11.556] } },
+    { "type": "Feature", "properties": { "id": "B004", "type": "residential", "floors": 2, "area_sqm": 110 }, "geometry": { "type": "Point", "coordinates": [76.130, 11.558] } },
+    { "type": "Feature", "properties": { "id": "B005", "type": "institutional", "floors": 2, "area_sqm": 400 }, "geometry": { "type": "Point", "coordinates": [76.140, 11.560] } },
+    { "type": "Feature", "properties": { "id": "B006", "type": "residential", "floors": 1, "area_sqm": 75 }, "geometry": { "type": "Point", "coordinates": [76.128, 11.550] } },
+    { "type": "Feature", "properties": { "id": "B007", "type": "residential", "floors": 2, "area_sqm": 130 }, "geometry": { "type": "Point", "coordinates": [76.142, 11.548] } },
+    { "type": "Feature", "properties": { "id": "B008", "type": "commercial", "floors": 2, "area_sqm": 180 }, "geometry": { "type": "Point", "coordinates": [76.138, 11.562] } },
+    { "type": "Feature", "properties": { "id": "B009", "type": "residential", "floors": 1, "area_sqm": 90 }, "geometry": { "type": "Point", "coordinates": [76.125, 11.545] } },
+    { "type": "Feature", "properties": { "id": "B010", "type": "religious", "floors": 1, "area_sqm": 200 }, "geometry": { "type": "Point", "coordinates": [76.136, 11.557] } },
+    { "type": "Feature", "properties": { "id": "B011", "type": "residential", "floors": 2, "area_sqm": 105 }, "geometry": { "type": "Point", "coordinates": [76.133, 11.565] } },
+    { "type": "Feature", "properties": { "id": "B012", "type": "residential", "floors": 1, "area_sqm": 65 }, "geometry": { "type": "Point", "coordinates": [76.145, 11.552] } },
+    { "type": "Feature", "properties": { "id": "B013", "type": "educational", "floors": 3, "area_sqm": 500 }, "geometry": { "type": "Point", "coordinates": [76.139, 11.570] } },
+    { "type": "Feature", "properties": { "id": "B014", "type": "residential", "floors": 2, "area_sqm": 140 }, "geometry": { "type": "Point", "coordinates": [76.127, 11.538] } },
+    { "type": "Feature", "properties": { "id": "B015", "type": "healthcare", "floors": 2, "area_sqm": 350 }, "geometry": { "type": "Point", "coordinates": [76.141, 11.558] } }
+  ]
+}

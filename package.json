@@ -1,0 +1,31 @@
+{
+  "name": "jaldrishti-mission-control",
+  "version": "1.0.0",
+  "description": "AI-Driven Flood Intelligence & Mission Control Dashboard",
+  "main": "dashboard/index.html",
+  "scripts": {
+    "dev": "python3 -m http.server 8001",
+    "serve": "npx -y serve dashboard -p 8001",
+    "api": "uvicorn src.api_server:app --host 0.0.0.0 --port 8000 --reload",
+    "test": "pytest tests/ -v --tb=short",
+    "test:coverage": "pytest tests/ -v --cov=src --cov-report=html",
+    "lint": "flake8 src/ tests/ && black --check src/ tests/",
+    "format": "black src/ tests/"
+  },
+  "keywords": [
+    "flood",
+    "disaster-management",
+    "gis",
+    "maplibre",
+    "ai",
+    "risk-assessment",
+    "pathfinding",
+    "resource-allocation",
+    "india"
+  ],
+  "author": "Team Jal Drishti",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

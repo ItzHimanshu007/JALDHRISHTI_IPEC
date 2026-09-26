@@ -1,0 +1,74 @@
+{
+  "metadata": {
+    "source": "AWS Terrarium / SRTM 30m DEM",
+    "processing_date": "2026-09-11T08:15:00Z",
+    "resolution_m": 30,
+    "crs": "EPSG:4326"
+  },
+  "profiles": {
+    "wayanad_meppadi": {
+      "min_elevation_m": 720,
+      "max_elevation_m": 980,
+      "mean_elevation_m": 800,
+      "std_elevation_m": 65,
+      "slope_min_deg": 2.1,
+      "slope_max_deg": 38.5,
+      "slope_mean_deg": 15.2,
+      "aspect_dominant": "SW",
+      "drainage_density_km_per_sqkm": 3.8,
+      "twi_mean": 6.2,
+      "transect": [
+        { "distance_m": 0, "elevation_m": 920, "slope_deg": 5.2 },
+        { "distance_m": 200, "elevation_m": 890, "slope_deg": 12.5 },
+        { "distance_m": 400, "elevation_m": 840, "slope_deg": 22.1 },
+        { "distance_m": 600, "elevation_m": 785, "slope_deg": 28.3 },
+        { "distance_m": 800, "elevation_m": 760, "slope_deg": 18.7 },
+        { "distance_m": 1000, "elevation_m": 740, "slope_deg": 8.4 },
+        { "distance_m": 1200, "elevation_m": 730, "slope_deg": 4.1 },
+        { "distance_m": 1400, "elevation_m": 725, "slope_deg": 2.5 }
+      ]
+    },
+    "darbhanga": {
+      "min_elevation_m": 44,
+      "max_elevation_m": 62,
+      "mean_elevation_m": 50,
+      "std_elevation_m": 4.2,
+      "slope_min_deg": 0.1,
+      "slope_max_deg": 5.8,
+      "slope_mean_deg": 1.2,
+      "aspect_dominant": "SE",
+      "drainage_density_km_per_sqkm": 1.5,
+      "twi_mean": 12.8,
+      "transect": [
+        { "distance_m": 0, "elevation_m": 58, "slope_deg": 0.5 },
+        { "distance_m": 500, "elevation_m": 55, "slope_deg": 0.8 },
+        { "distance_m": 1000, "elevation_m": 48, "slope_deg": 2.1 },
+        { "distance_m": 1500, "elevation_m": 46, "slope_deg": 1.5 },
+        { "distance_m": 2000, "elevation_m": 47, "slope_deg": 0.6 },
+        { "distance_m": 2500, "elevation_m": 52, "slope_deg": 1.8 },
+        { "distance_m": 3000, "elevation_m": 55, "slope_deg": 0.4 }
+      ]
+    },
+    "dhemaji": {
+      "min_elevation_m": 58,
+      "max_elevation_m": 95,
+      "mean_elevation_m": 70,
+      "std_elevation_m": 9.5,
+      "slope_min_deg": 0.3,
+      "slope_max_deg": 12.4,
+      "slope_mean_deg": 3.1,
+      "aspect_dominant": "S",
+      "drainage_density_km_per_sqkm": 2.8,
+      "twi_mean": 9.5,
+      "transect": [
+        { "distance_m": 0, "elevation_m": 88, "slope_deg": 3.2 },
+        { "distance_m": 400, "elevation_m": 78, "slope_deg": 5.8 },
+        { "distance_m": 800, "elevation_m": 68, "slope_deg": 4.2 },
+        { "distance_m": 1200, "elevation_m": 62, "slope_deg": 2.1 },
+        { "distance_m": 1600, "elevation_m": 60, "slope_deg": 1.5 },
+        { "distance_m": 2000, "elevation_m": 65, "slope_deg": 3.8 },
+        { "distance_m": 2400, "elevation_m": 72, "slope_deg": 2.4 }
+      ]
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "generated_at": "2026-09-11T10:30:00Z",
+    "model_version": "v2.1",
+    "clustering_method": "DBSCAN",
+    "eps_km": 0.5,
+    "min_samples": 10
+  },
+  "clusters": [
+    {
+      "cluster_id": "WM-C01",
+      "village_id": "wayanad_meppadi",
+      "centroid": { "lat": 11.553, "lng": 76.132 },
+      "population": 4200,
+      "density_per_sqkm": 1850,
+      "risk_score": 0.72,
+      "dominant_building_type": "residential",
+      "elevation_mean_m": 785,
+      "nearest_safe_haven_id": "SH001",
+      "nearest_safe_haven_distance_m": 980
+    },
+    {
+      "cluster_id": "WM-C02",
+      "village_id": "wayanad_meppadi",
+      "centroid": { "lat": 11.560, "lng": 76.140 },
+      "population": 3800,
+      "density_per_sqkm": 2100,
+      "risk_score": 0.58,
+      "dominant_building_type": "mixed",
+      "elevation_mean_m": 810,
+      "nearest_safe_haven_id": "SH002",
+      "nearest_safe_haven_distance_m": 1250
+    },
+    {
+      "cluster_id": "WM-C03",
+      "village_id": "wayanad_meppadi",
+      "centroid": { "lat": 11.545, "lng": 76.125 },
+      "population": 1800,
+      "density_per_sqkm": 950,
+      "risk_score": 0.85,
+      "dominant_building_type": "residential",
+      "elevation_mean_m": 770,
+      "nearest_safe_haven_id": "SH005",
+      "nearest_safe_haven_distance_m": 600
+    },
+    {
+      "cluster_id": "DB-C01",
+      "village_id": "darbhanga",
+      "centroid": { "lat": 26.152, "lng": 85.900 },
+      "population": 12000,
+      "density_per_sqkm": 4500,
+      "risk_score": 0.68,
+      "dominant_building_type": "residential",
+      "elevation_mean_m": 51,
+      "nearest_safe_haven_id": "SH101",
+      "nearest_safe_haven_distance_m": 1100
+    },
+    {
+      "cluster_id": "DB-C02",
+      "village_id": "darbhanga",
+      "centroid": { "lat": 26.160, "lng": 85.905 },
+      "population": 8500,
+      "density_per_sqkm": 3200,
+      "risk_score": 0.45,
+      "dominant_building_type": "mixed",
+      "elevation_mean_m": 54,
+      "nearest_safe_haven_id": "SH102",
+      "nearest_safe_haven_distance_m": 800
+    },
+    {
+      "cluster_id": "DH-C01",
+      "village_id": "dhemaji",
+      "centroid": { "lat": 27.5947, "lng": 94.8632 },
+      "population": 6200,
+      "density_per_sqkm": 1400,
+      "risk_score": 0.82,
+      "dominant_building_type": "residential",
+      "elevation_mean_m": 68,
+      "nearest_safe_haven_id": "SH201",
+      "nearest_safe_haven_distance_m": 900
+    },
+    {
+      "cluster_id": "DH-C02",
+      "village_id": "dhemaji",
+      "centroid": { "lat": 27.6100, "lng": 94.8450 },
+      "population": 4800,
+      "density_per_sqkm": 1100,
+      "risk_score": 0.60,
+      "dominant_building_type": "chang_ghar",
+      "elevation_mean_m": 74,
+      "nearest_safe_haven_id": "SH204",
+      "nearest_safe_haven_distance_m": 450
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "name": "risk_zones_sample",
+  "description": "Pre-computed risk zones for Monsoon scenario (250mm rainfall event)",
+  "metadata": {
+    "generated_at": "2026-09-11T10:30:00Z",
+    "rainfall_mm": 250,
+    "model_version": "v2.1",
+    "grid_resolution_m": 40
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "WM-001", "village_id": "wayanad_meppadi", "risk_level": "extreme", "risk_score": 0.92, "water_depth_m": 3.2, "elevation_m": 760, "population_exposed": 1200 },
+      "geometry": { "type": "Polygon", "coordinates": [[[76.125, 11.540], [76.130, 11.540], [76.130, 11.545], [76.125, 11.545], [76.125, 11.540]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "WM-002", "village_id": "wayanad_meppadi", "risk_level": "high", "risk_score": 0.78, "water_depth_m": 2.1, "elevation_m": 790, "population_exposed": 850 },
+      "geometry": { "type": "Polygon", "coordinates": [[[76.130, 11.545], [76.135, 11.545], [76.135, 11.550], [76.130, 11.550], [76.130, 11.545]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "WM-003", "village_id": "wayanad_meppadi", "risk_level": "medium", "risk_score": 0.55, "water_depth_m": 1.2, "elevation_m": 820, "population_exposed": 400 },
+      "geometry": { "type": "Polygon", "coordinates": [[[76.135, 11.555], [76.140, 11.555], [76.140, 11.560], [76.135, 11.560], [76.135, 11.555]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "WM-004", "village_id": "wayanad_meppadi", "risk_level": "low", "risk_score": 0.22, "water_depth_m": 0.3, "elevation_m": 870, "population_exposed": 100 },
+      "geometry": { "type": "Polygon", "coordinates": [[[76.145, 11.565], [76.150, 11.565], [76.150, 11.570], [76.145, 11.570], [76.145, 11.565]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "DB-001", "village_id": "darbhanga", "risk_level": "extreme", "risk_score": 0.88, "water_depth_m": 2.8, "elevation_m": 48, "population_exposed": 3500 },
+      "geometry": { "type": "Polygon", "coordinates": [[[85.885, 26.140], [85.895, 26.140], [85.895, 26.150], [85.885, 26.150], [85.885, 26.140]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "DB-002", "village_id": "darbhanga", "risk_level": "high", "risk_score": 0.72, "water_depth_m": 1.8, "elevation_m": 52, "population_exposed": 2200 },
+      "geometry": { "type": "Polygon", "coordinates": [[[85.895, 26.150], [85.905, 26.150], [85.905, 26.160], [85.895, 26.160], [85.895, 26.150]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "DH-001", "village_id": "dhemaji", "risk_level": "extreme", "risk_score": 0.95, "water_depth_m": 3.8, "elevation_m": 62, "population_exposed": 2800 },
+      "geometry": { "type": "Polygon", "coordinates": [[[94.545, 27.465], [94.555, 27.465], [94.555, 27.475], [94.545, 27.475], [94.545, 27.465]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "grid_id": "DH-002", "village_id": "dhemaji", "risk_level": "high", "risk_score": 0.80, "water_depth_m": 2.4, "elevation_m": 68, "population_exposed": 1900 },
+      "geometry": { "type": "Polygon", "coordinates": [[[94.555, 27.475], [94.565, 27.475], [94.565, 27.485], [94.555, 27.485], [94.555, 27.475]]] }
+    }
+  ]
+}

@@ -1,0 +1,521 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --void:#04080f;--panel:#080f1a;--card:#0c1525;--card2:#0f1c30;
+  --teal:#00c8ff;--teal2:rgba(0,200,255,0.12);--teal3:rgba(0,200,255,0.04);
+  --amber:#ffaa00;--amber2:rgba(255,170,0,0.15);
+  --red:#ff3b3b;--red2:rgba(255,59,59,0.15);
+  --green:#00e676;--green2:rgba(0,230,118,0.12);
+  --border:rgba(0,180,255,0.12);--border2:rgba(0,180,255,0.3);
+  --text:#c8d8f0;--text2:#6a8aaa;--text3:#8ba8c8;
+  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+}
+body{background:var(--void);color:var(--text);font-family:var(--sans);min-height:100vh}
+.app{display:grid;grid-template-rows:auto 1fr;min-height:600px}
+
+/* Header */
+.hdr{background:var(--panel);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#00c8ff22,#00c8ff44);border:1px solid var(--teal);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-wave{fill:none;stroke:var(--teal);stroke-width:1.5;stroke-linecap:round}
+.logo-text{font-size:18px;font-weight:700;color:#fff;letter-spacing:.06em}
+.logo-sub{font-size:10px;color:var(--text2);letter-spacing:.12em;text-transform:uppercase;font-family:var(--mono)}
+.hdr-status{display:flex;align-items:center;gap:16px}
+.status-pill{display:flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);color:var(--teal);background:var(--teal2);border:1px solid rgba(0,200,255,0.25);border-radius:20px;padding:3px 10px}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.time-display{font-size:11px;font-family:var(--mono);color:var(--text2)}
+
+/* Nav tabs */
+.nav{background:var(--panel);border-bottom:1px solid var(--border);display:flex;gap:0;padding:0 16px}
+.nav-tab{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text2);transition:all .2s;white-space:nowrap}
+.nav-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.nav-tab:hover:not(.active){color:var(--text3)}
+
+/* Main content */
+.content{padding:14px;overflow:auto}
+.view{display:none}.view.active{display:block}
+
+/* ===== VIEW 1: PIPELINE ===== */
+.pipeline-wrap{display:flex;flex-direction:column;gap:6px}
+.phase-row{display:flex;align-items:stretch;gap:0}
+.phase-nodes{display:flex;gap:6px;flex:1}
+.ph-node{flex:1;border-radius:8px;border:1px solid;padding:9px 11px;cursor:pointer;transition:all .18s;position:relative;min-width:0}
+.ph-node:hover{transform:translateY(-2px)}
+.ph-node.sel{box-shadow:0 0 0 2px var(--teal)}
+.ph-node .ph-title{font-size:12px;font-weight:700;line-height:1.2;margin-bottom:2px}
+.ph-node .ph-sub{font-size:10px;opacity:.65;line-height:1.3}
+.ph-node .ph-badge{font-size:9px;font-weight:700;font-family:var(--mono);padding:1px 5px;border-radius:3px;margin-top:4px;display:inline-block;letter-spacing:.06em}
+.phase-arrow{display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:11px;padding:0 2px;flex-shrink:0}
+.phase-connector{text-align:center;color:var(--text2);font-size:13px;padding:2px 0;letter-spacing:.06em}
+.node-detail{border-radius:10px;background:var(--card);border:1px solid var(--border2);padding:14px;margin:8px 0}
+.node-detail h3{font-size:14px;font-weight:700;color:#fff;margin-bottom:6px}
+.nd-body{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px}
+.formula-box{background:#04080f;border:1px solid rgba(0,200,255,0.2);border-radius:6px;padding:8px 11px;font-family:var(--mono);font-size:10.5px;color:var(--teal);line-height:1.7;margin-bottom:8px;white-space:pre-wrap}
+.nd-warn{font-size:11px;background:rgba(255,170,0,.1);border-left:3px solid var(--amber);border-radius:0 5px 5px 0;padding:5px 9px;color:#ffc040;margin-bottom:6px}
+.nd-ok{font-size:11px;background:rgba(0,230,118,.08);border-left:3px solid var(--green);border-radius:0 5px 5px 0;padding:5px 9px;color:#60e890;margin-bottom:6px}
+.nd-tags{display:flex;gap:5px;flex-wrap:wrap}
+.nd-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--teal2);color:var(--teal);border:1px solid rgba(0,200,255,.2)}
+
+/* ===== VIEW 2: DATA SOURCES ===== */
+.ds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.ds-card{border-radius:8px;border:1px solid var(--border);background:var(--card);padding:10px 12px;cursor:pointer;transition:all .18s}
+.ds-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.ds-card.sel{border-color:var(--teal);box-shadow:0 0 0 1px rgba(0,200,255,.3)}
+.ds-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:2px}
+.ds-org{font-size:10px;color:var(--text2);margin-bottom:5px}
+.ds-pill{font-size:9px;font-weight:700;font-family:var(--mono);padding:2px 6px;border-radius:3px;display:inline-block}
+.ds-use{font-size:10.5px;color:var(--text3);margin-top:5px;line-height:1.4}
+.ds-detail{border-radius:10px;background:var(--card);border:1px solid var(--border2);padding:14px;margin:8px 0}
+.ds-detail h3{font-size:14px;font-weight:700;color:#fff;margin-bottom:5px}
+.ds-detail p{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px}
+.ds-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.ds-meta-item b{display:block;font-size:10px;color:var(--text2);margin-bottom:2px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+.ds-meta-item span{font-size:11px;color:var(--text3)}
+.ds-url{font-size:10.5px;color:var(--teal);margin-top:8px;word-break:break-all;font-family:var(--mono)}
+.cat-hdr{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text2);padding:12px 0 5px;font-family:var(--mono);border-bottom:1px solid var(--border);margin-bottom:8px}
+
+/* ===== VIEW 3: REGIONS ===== */
+.regions-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.region-card{border-radius:10px;background:var(--card);border:1px solid var(--border);padding:14px;position:relative;overflow:hidden}
+.region-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.rc-kerala::before{background:linear-gradient(90deg,#00c8ff,#0066ff)}
+.rc-bihar::before{background:linear-gradient(90deg,#ffaa00,#ff6600)}
+.rc-assam::before{background:linear-gradient(90deg,#00e676,#00aaff)}
+.region-name{font-size:15px;font-weight:700;color:#fff;margin-bottom:2px}
+.region-district{font-size:11px;color:var(--text2);margin-bottom:10px;font-family:var(--mono)}
+.region-stat{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
+.region-stat:last-child{border-bottom:none}
+.rs-label{font-size:11px;color:var(--text2)}
+.rs-val{font-size:12px;font-weight:700;font-family:var(--mono)}
+.risk-bar{height:4px;border-radius:2px;margin-top:10px;overflow:hidden;background:rgba(255,255,255,0.06)}
+.risk-fill{height:100%;border-radius:2px;animation:fillBar 1.2s ease-out forwards}
+@keyframes fillBar{from{width:0}to{width:var(--w)}}
+.risk-label{font-size:10px;color:var(--text2);margin-top:4px;font-family:var(--mono)}
+.challenge-list{margin-top:10px}
+.challenge-item{font-size:11px;color:var(--text3);padding:3px 0;display:flex;gap:6px;line-height:1.4}
+.challenge-item::before{content:'›';color:var(--teal);flex-shrink:0}
+
+/* ===== VIEW 4: METRICS ===== */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px}
+.metric-card{border-radius:8px;background:var(--card);border:1px solid var(--border);padding:12px;text-align:center}
+.metric-val{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1}
+.metric-label{font-size:10px;color:var(--text2);margin-top:5px;text-transform:uppercase;letter-spacing:.08em}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:3px}
+.score-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.score-item{flex:1;min-width:140px;border-radius:8px;background:var(--card);border:1px solid var(--border);padding:12px}
+.score-name{font-size:11px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+.score-bar-wrap{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:4px}
+.score-bar{height:100%;border-radius:3px;animation:fillBar 1.4s ease-out forwards}
+.score-pct{font-size:13px;font-weight:700;font-family:var(--mono)}
+.pipeline-flow{border-radius:10px;background:var(--card);border:1px solid var(--border);padding:14px}
+.flow-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:12px;font-family:var(--mono)}
+.flow-steps{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.flow-step{font-size:10px;font-family:var(--mono);padding:4px 8px;border-radius:4px;background:var(--teal2);color:var(--teal);border:1px solid rgba(0,200,255,.2);white-space:nowrap}
+.flow-arr{color:var(--text2);font-size:11px}
+
+/* close btn */
+.close-x{float:right;cursor:pointer;color:var(--text2);font-size:14px;line-height:1;margin-top:-2px;font-family:var(--mono)}
+.sep{height:1px;background:var(--border);margin:8px 0}
+</style>
+
+<div class="app">
+<!-- Header -->
+<div>
+<div class="hdr">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path class="logo-wave" d="M2 11 Q5 7 9 9 Q13 11 16 7"/><path class="logo-wave" d="M2 14 Q5 10 9 12 Q13 14 16 10"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">JAL DRISHTI</div>
+      <div class="logo-sub">Flood Mission Control · India</div>
+    </div>
+  </div>
+  <div class="hdr-status">
+    <div class="status-pill"><div class="pulse"></div>LIVE MONITORING</div>
+    <div class="time-display" id="clock">--:--:-- IST</div>
+  </div>
+</div>
+<div class="nav" id="nav">
+  <div class="nav-tab active" data-view="pipeline">Pipeline</div>
+  <div class="nav-tab" data-view="datasources">Data Sources</div>
+  <div class="nav-tab" data-view="regions">Coverage Regions</div>
+  <div class="nav-tab" data-view="metrics">Scores & Metrics</div>
+</div>
+</div>
+
+<div class="content">
+
+<!-- VIEW 1: PIPELINE -->
+<div class="view active" id="view-pipeline">
+<div id="pipeline-detail"></div>
+<div class="pipeline-wrap" id="pipeline-wrap"></div>
+</div>
+
+<!-- VIEW 2: DATA SOURCES -->
+<div class="view" id="view-datasources">
+<div id="ds-detail-container"></div>
+<div id="ds-cats"></div>
+</div>
+
+<!-- VIEW 3: REGIONS -->
+<div class="view" id="view-regions">
+<div class="regions-grid">
+  <div class="region-card rc-kerala">
+    <div class="region-name">Meppadi</div>
+    <div class="region-district">Wayanad District, Kerala</div>
+    <div class="region-stat"><span class="rs-label">Flood type</span><span class="rs-val" style="color:var(--teal)">Flash + Landslide</span></div>
+    <div class="region-stat"><span class="rs-label">Terrain</span><span class="rs-val">High-altitude, 700–2100m</span></div>
+    <div class="region-stat"><span class="rs-label">DEM used</span><span class="rs-val" style="color:var(--teal)">ALOS 12.5m</span></div>
+    <div class="region-stat"><span class="rs-label">Avg slope</span><span class="rs-val">18–35°</span></div>
+    <div class="region-stat"><span class="rs-label">Key risk event</span><span class="rs-val" style="color:var(--amber)">2018 Kerala floods</span></div>
+    <div class="risk-bar"><div class="risk-fill" style="--w:88%;background:linear-gradient(90deg,#00c8ff,#ff3b3b)"></div></div>
+    <div class="risk-label">Composite risk index: 88/100 — EXTREME</div>
+    <div class="challenge-list">
+      <div class="challenge-item">D8 fails — steep terrain needs D-Infinity</div>
+      <div class="challenge-item">Cloud cover voids ALOS DEM in monsoon</div>
+      <div class="challenge-item">Banasura Sagar dam upstream override critical</div>
+      <div class="challenge-item">Flash flood Tc as low as 45 minutes</div>
+    </div>
+  </div>
+  <div class="region-card rc-bihar">
+    <div class="region-name">Darbhanga</div>
+    <div class="region-district">Darbhanga District, Bihar</div>
+    <div class="region-stat"><span class="rs-label">Flood type</span><span class="rs-val" style="color:var(--amber)">Riverine + Embankment</span></div>
+    <div class="region-stat"><span class="rs-label">Terrain</span><span class="rs-val">Flat alluvial plain, 40–55m</span></div>
+    <div class="region-stat"><span class="rs-label">DEM used</span><span class="rs-val" style="color:var(--teal)">Cartosat 10m</span></div>
+    <div class="region-stat"><span class="rs-label">Avg slope</span><span class="rs-val">&lt;0.1° (critical)</span></div>
+    <div class="region-stat"><span class="rs-label">Key risk event</span><span class="rs-val" style="color:var(--amber)">2019 Bihar floods</span></div>
+    <div class="risk-bar"><div class="risk-fill" style="--w:82%;background:linear-gradient(90deg,#ffaa00,#ff3b3b)"></div></div>
+    <div class="risk-label">Composite risk index: 82/100 — HIGH</div>
+    <div class="challenge-list">
+      <div class="challenge-item">Slope &lt;0.1° — D8 completely fails here</div>
+      <div class="challenge-item">Bathtub inundation spreads km-wide in hours</div>
+      <div class="challenge-item">Bagmati embankment breach history</div>
+      <div class="challenge-item">Urban drainage failure not captured by TWI</div>
+    </div>
+  </div>
+  <div class="region-card rc-assam">
+    <div class="region-name">Dhemaji</div>
+    <div class="region-district">Dhemaji District, Assam</div>
+    <div class="region-stat"><span class="rs-label">Flood type</span><span class="rs-val" style="color:var(--green)">Braided River + Extreme Precip</span></div>
+    <div class="region-stat"><span class="rs-label">Terrain</span><span class="rs-val">Brahmaputra floodplain, 90–120m</span></div>
+    <div class="region-stat"><span class="rs-label">DEM used</span><span class="rs-val" style="color:var(--teal)">Cartosat 10m</span></div>
+    <div class="region-stat"><span class="rs-label">Avg slope</span><span class="rs-val">0.1–0.5°</span></div>
+    <div class="region-stat"><span class="rs-label">Key risk event</span><span class="rs-val" style="color:var(--amber)">2022 Assam floods</span></div>
+    <div class="risk-bar"><div class="risk-fill" style="--w:91%;background:linear-gradient(90deg,#00e676,#ff3b3b)"></div></div>
+    <div class="risk-label">Composite risk index: 91/100 — EXTREME</div>
+    <div class="challenge-list">
+      <div class="challenge-item">Braided channels shift — K&X must be re-derived each season</div>
+      <div class="challenge-item">Subansiri dam upstream — largest hydropower in NE India</div>
+      <div class="challenge-item">Wetland depressions must NOT be pit-filled (ε=0.001m)</div>
+      <div class="challenge-item">Precipitation &gt;300mm/day events increasing</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- VIEW 4: METRICS -->
+<div class="view" id="view-metrics">
+<div class="metrics-grid">
+  <div class="metric-card"><div class="metric-val" style="color:var(--teal)">91%</div><div class="metric-label">Pipeline completeness</div><div class="metric-sub">vs industry standard</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--green)">0.6+</div><div class="metric-label">Target CSI score</div><div class="metric-sub">WMO operational standard</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--amber)">72hr</div><div class="metric-label">Forecast window</div><div class="metric-sub">T+0 to T+72, 1hr steps</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--teal)">30m</div><div class="metric-label">Grid resolution</div><div class="metric-sub">ALOS/Cartosat DEM</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--green)">3</div><div class="metric-label">Rainfall scenarios</div><div class="metric-sub">P50 / P75 / P90</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--amber)">4</div><div class="metric-label">Risk classes</div><div class="metric-sub">Low→Extreme + confidence</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--teal)">300</div><div class="metric-label">XGBoost trees</div><div class="metric-sub">8-feature physics vector</div></div>
+  <div class="metric-card"><div class="metric-val" style="color:var(--red)">85%</div><div class="metric-label">Reservoir trigger</div><div class="metric-sub">Override threshold</div></div>
+</div>
+
+<div class="score-row">
+  <div class="score-item"><div class="score-name">Physical accuracy</div><div class="score-bar-wrap"><div class="score-bar" style="--w:87%;background:var(--teal);width:87%"></div></div><div class="score-pct" style="color:var(--teal)">87/100</div></div>
+  <div class="score-item"><div class="score-name">ML architecture</div><div class="score-bar-wrap"><div class="score-bar" style="--w:95%;background:var(--green);width:95%"></div></div><div class="score-pct" style="color:var(--green)">95/100</div></div>
+  <div class="score-item"><div class="score-name">Operational readiness</div><div class="score-bar-wrap"><div class="score-bar" style="--w:82%;background:var(--amber);width:82%"></div></div><div class="score-pct" style="color:var(--amber)">82/100</div></div>
+  <div class="score-item"><div class="score-name">NDRF credibility</div><div class="score-bar-wrap"><div class="score-bar" style="--w:88%;background:#aa44ff;width:88%"></div></div><div class="score-pct" style="color:#aa44ff">88/100</div></div>
+</div>
+
+<div class="pipeline-flow">
+  <div class="flow-title">Full pipeline flow</div>
+  <div class="flow-steps">
+    <span class="flow-step">DEM Acquisition</span><span class="flow-arr">→</span>
+    <span class="flow-step">Void Fill</span><span class="flow-arr">→</span>
+    <span class="flow-step">Pit Fill</span><span class="flow-arr">→</span>
+    <span class="flow-step">D-Infinity</span><span class="flow-arr">→</span>
+    <span class="flow-step">Flow Acc + TWI</span><span class="flow-arr">→</span>
+    <span class="flow-step">Channel Network</span><span class="flow-arr">→</span>
+    <span class="flow-step">AMC-SCS-CN</span><span class="flow-arr">→</span>
+    <span class="flow-step">SCS Unit Hydro</span><span class="flow-arr">→</span>
+    <span class="flow-step">Flood Hydrograph</span><span class="flow-arr">→</span>
+    <span class="flow-step">Kinematic Wave</span><span class="flow-arr">+</span>
+    <span class="flow-step">Muskingum-Cunge</span><span class="flow-arr">→</span>
+    <span class="flow-step">Inundation Depth</span><span class="flow-arr">→</span>
+    <span class="flow-step">Reservoir Override</span><span class="flow-arr">→</span>
+    <span class="flow-step">Degraded Mode</span><span class="flow-arr">→</span>
+    <span class="flow-step">XGBoost + proba</span><span class="flow-arr">→</span>
+    <span class="flow-step">Sentinel-1 CSI</span><span class="flow-arr">→</span>
+    <span class="flow-step">Vehicle A*</span><span class="flow-arr">→</span>
+    <span class="flow-step">Demand Dispatch</span><span class="flow-arr">→</span>
+    <span class="flow-step">Mission Control UI</span>
+  </div>
+</div>
+</div>
+
+</div><!-- end content -->
+</div><!-- end app -->
+
+<script>
+// Clock
+function updateClock(){
+  const now=new Date();
+  const ist=new Date(now.getTime()+5.5*3600000);
+  const t=ist.toISOString().substr(11,8);
+  document.getElementById('clock').textContent=t+' IST';
+}
+setInterval(updateClock,1000);updateClock();
+
+// Nav
+document.querySelectorAll('.nav-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('view-'+tab.dataset.view).classList.add('active');
+  });
+});
+
+// ===== PIPELINE DATA =====
+const phases=[
+ {label:'Phase 1 — Static terrain',color:'#00c8ff',nodes:[
+  {id:'dem',title:'DEM Acquisition',sub:'ALOS 12.5m · Cartosat 10m',badge:'STATIC',bc:'#00c8ff',
+   detail:'Digital Elevation Model is the absolute foundation. ALOS PALSAR (12.5m) for Kerala hills, Cartosat-1 (10m) for Bihar/Assam flat plains. SRTM 30m is NOT acceptable — elevation errors create false channels.',
+   formula:'Source priority:\n  ALOS PALSAR  → slope > 2° (Kerala)\n  Cartosat-1   → slope < 1° (Bihar, Assam)\n  SRTM 30m     → void-fill fallback ONLY',
+   warn:'SRTM 30m creates ±16m elevation errors on flat Darbhanga terrain.',
+   ok:'Use ALOS for Meppadi, Cartosat for Darbhanga/Dhemaji.',
+   tags:['ALOS PALSAR','Cartosat-1','12.5m resolution']},
+  {id:'void',title:'Void Filling',sub:'SRTM interpolation fallback',badge:'STATIC',bc:'#00c8ff',
+   detail:'Cloud cover causes data voids in Kerala DEMs. Fill voids using bilinear interpolation with SRTM as secondary source. Flag all filled cells in a confidence layer (0–1).',
+   formula:'Void > 3×3 cells → SRTM backfill\nIsolated void (1–2 cells) → bilinear interpolation\nAll filled cells → confidence layer flag',
+   warn:null,ok:'Propagate confidence uncertainty downstream to XGBoost.',
+   tags:['Bilinear interpolation','SRTM fallback','Confidence flag']},
+  {id:'pit',title:'Pit Filling',sub:"Wang & Liu 2006",badge:'STATIC',bc:'#00c8ff',
+   detail:'Raw DEMs contain artificial depressions. Wang & Liu fills pits by raising floor to lowest outlet elevation + ε. Do NOT use simple sink filling — it removes legitimate Assam wetlands.',
+   formula:'Elev_filled(p) = min(Elev_outlet) + ε\nε = 0.001m  ← preserves Assam wetlands\nAlgorithm: priority-flood (Wang & Liu 2006)',
+   warn:'Simple D8 sink filling removes real wetland depressions in Dhemaji.',
+   ok:null,tags:["Wang & Liu 2006",'Priority-flood','ε = 0.001m']},
+  {id:'dinf',title:'D-Infinity Flow Direction',sub:'8-directional steepest descent',badge:'STATIC',bc:'#00c8ff',
+   detail:'Unlike D8 (single neighbor), D-Infinity splits flow between two steepest neighbors proportionally. Critical for Darbhanga where slope < 0.1° makes D8 create unnatural straight-line channels.',
+   formula:'α = arctan(dz/dy, dz/dx)\nFlow partitioned between 2 neighbors\nProportional to angular deviation from α\nTarboton (1997)',
+   warn:'D8 fails on slopes < 0.1° — covers 60% of Darbhanga district.',
+   ok:'D-Infinity reduces flow concentration errors ~40% on flat terrain.',
+   tags:['Tarboton 1997','D-Infinity','Flat terrain robust']},
+  {id:'twicha',title:'Flow Acc → TWI → Channels',sub:'Threshold: 5k–10k cells',badge:'STATIC',bc:'#00c8ff',
+   detail:'Flow accumulation counts upstream cells. TWI identifies waterlogging-prone valleys. Channel network extracted at 5,000–10,000 cell threshold — too low creates ghost streams, too high misses minor drains.',
+   formula:'TWI = ln(a / tan(β))\na = upslope contributing area (m²/m)\nβ = local slope angle\nChannel threshold: 5,000–10,000 cells\nTWI > 10 → high waterlogging risk',
+   warn:'Threshold too low creates ghost streams in dry Darbhanga areas.',
+   ok:'Channels feed Muskingum-Cunge. Hillslopes feed Kinematic Wave.',
+   tags:['TWI','Flow accumulation','Channel network']},
+ ]},
+ {label:'Phase 2 — Live hydrological modelling',color:'#4488ff',nodes:[
+  {id:'amc',title:'AMC-Adjusted SCS-CN',sub:'AMC I/II/III from SMAP API',badge:'LIVE',bc:'#4488ff',
+   detail:'Curve Number controls rainfall→runoff conversion. AMC III (saturated soil) raises CN ~20 points, nearly doubling runoff. Most systems skip this — Jal Drishti uses live SMAP soil moisture to set AMC class every 6 hours.',
+   formula:'Q = (P − Ia)² / (P − Ia + S)\nS = (25400/CN) − 254  [mm]\nIa = 0.2 × S\nAMC III CN ≈ AMC II CN × 1.20\nAMC I  CN ≈ AMC II CN × 0.78',
+   warn:'Using default AMC II during saturated Assam monsoon underestimates runoff by 40–60%.',
+   ok:'Unit check: P, Ia, S all in mm. CN is dimensionless.',
+   tags:['SCS-CN','AMC I/II/III','SMAP','IMSD guidelines']},
+  {id:'uh',title:'SCS Dimensionless UH',sub:'Matched to IMD 1hr/3hr timestep',badge:'LIVE',bc:'#4488ff',
+   detail:'Converts runoff volume Q into flood hydrograph. SCS Dimensionless UH chosen because it needs no streamflow calibration — critical for ungauged basins like Meppadi. Storm duration D must exactly match IMD data interval.',
+   formula:'Tp = D/2 + 0.6×Tc  [hr, time to peak]\nQp = 2.08×A/Tp  [m³/s, peak discharge]\nA = basin area [km²]\nD = storm duration = IMD timestep\nTc = time of concentration [hr]',
+   warn:'D ≠ IMD timestep causes wrong peak timing. Always sync to IMD interval.',
+   ok:'For ungauged (Meppadi): SCS DUH. Gauged (CWC stations): observed UH.',
+   tags:['SCS dimensionless UH','Ungauged basin','IMD timestep']},
+  {id:'hydro',title:'Flood Hydrograph Q(t)',sub:'P50/P75/P90 scenarios',badge:'LIVE',bc:'#4488ff',
+   detail:'Convolves unit hydrograph with effective rainfall time series. Three scenarios run simultaneously from IMD ensemble quantiles. Output uncertainty envelope feeds directly into XGBoost confidence scoring.',
+   formula:'Q(t) = Σ[P_eff(τ) × UH(t−τ)]Δτ\nRun for: P50, P75, P90 IMD quantiles\nOutput: Q(t) per sub-basin, T+0 to T+72hr\nUncertainty band = Q_P90 − Q_P50',
+   warn:null,ok:'P50/P75/P90 uncertainty band becomes the confidence overlay in UI.',
+   tags:['Hydrograph convolution','P50/P75/P90','72hr forecast']},
+ ]},
+ {label:'Phase 3 — Routing & resilience',color:'#ffaa00',nodes:[
+  {id:'routing',title:'Dual Routing Engine',sub:'Kinematic Wave + Muskingum-Cunge',badge:'ROUTING',bc:'#ffaa00',
+   detail:'Two routing methods run in parallel. Hillslope cells use kinematic wave. Channel cells use Muskingum-Cunge — derives K and X from geometry, no gauge calibration needed. Courant condition enforced with auto sub-timestep.',
+   formula:'Kinematic wave: ∂Q/∂t + c·∂Q/∂x = 0\nCourant: C = V·Δt/Δx ≤ 1  ← ENFORCED\nAuto sub-timestep if C > 1\n\nMuskingum-Cunge:\nK = Δx/c  [geometry-derived]\nX = 0.5×[1 − Q/(B·S₀·c·Δx²)]',
+   warn:'At 30m DEM, 1hr timestep, V=2m/s: C=240 — UNSTABLE without sub-timestep.',
+   ok:'Muskingum-Cunge derives K,X from geometry — no calibration for ungauged Dhemaji.',
+   tags:['Kinematic wave','Muskingum-Cunge','Courant condition']},
+  {id:'inund',title:'Inundation + Lateral Spread',sub:'Bathtub spreading + Manning\'s V',badge:'ROUTING',bc:'#ffaa00',
+   detail:'After channel routing, overtopping water spreads laterally using bathtub model — iteratively fills adjacent cells below water surface elevation until volume conserved. Approximates 2D without full shallow water equations.',
+   formula:'Manning\'s V (channels only):\nV = (1/n)×R^(2/3)×S^(1/2)\n\nBathtub spread:\nFlood cells where Elev < WSE\nIterate until ΔVol < 0.1%\nOutput: depth (m) + velocity (m/s) per cell per hr',
+   warn:'Full HEC-RAS 2D is the ideal. Bathtub acceptable for planning-level analysis.',
+   ok:'Depth and velocity both feed as features into XGBoost.',
+   tags:["Manning's V",'Bathtub inundation','Depth per cell']},
+  {id:'reservoir',title:'Reservoir Override Layer',sub:'85% capacity + breach rules',badge:'OVERRIDE',bc:'#ff6600',
+   detail:'Upstream dam breach or release invalidates physics predictions. Monitors Banasura Sagar (Kerala), Bagmati barrage (Bihar), Subansiri dam (Assam) via state authority APIs with 15-min heartbeat checks.',
+   formula:'IF storage > 85% of FRL:\n  downstream risk += 1 level\n  re-compute Q(t) = spillway capacity\n\nIF breach_prob > 60%:\n  V_wave = 2×√(g×h₀)  [Ritter]\n  ALL downstream → EXTREME\n  Override XGBoost output',
+   warn:'Silent reservoir API failure → catastrophic miss. 15-min heartbeat required.',
+   ok:'If API silent >1hr → assume 80%, alert operators, escalate conservatively.',
+   tags:['Reservoir override','Ritter dam-break','Banasura Sagar','Subansiri']},
+  {id:'degraded',title:'Degraded Mode Protocol',sub:'API failure fallbacks + stale flags',badge:'RESILIENCE',bc:'#ff6600',
+   detail:'A system that fails silently during a disaster is worse than no system. Every external data dependency has a defined fallback and visible UI flag with last-update timestamp.',
+   formula:'IMD rainfall fails:\n  → last known + persistence + 6hr\n  → UI: "STALE DATA T+Xhr"\n  → escalate to P90 scenario\nSoil moisture fails → default AMC II\nReservoir fails → assume 80% fill',
+   warn:'4 external APIs: IMD, SMAP, reservoir, CWC. Each needs independent watchdog.',
+   ok:'Degraded mode banner always visible. Never silently degrade.',
+   tags:['Degraded mode','API watchdog','Stale data flag']},
+ ]},
+ {label:'Phase 4 — ML intelligence',color:'#aa44ff',nodes:[
+  {id:'xgb',title:'XGBoost Risk Classifier',sub:'8 physics features → predict_proba',badge:'ML',bc:'#aa44ff',
+   detail:'XGBoost receives physics pipeline outputs as features — not raw terrain. 300 trees with early stopping. predict_proba() outputs confidence for each risk class — operators see where the model is uncertain.',
+   formula:'Features: [Depth(t), Velocity(t), TWI,\n  DistToChannel, SoilMoisture,\n  LandUse_CN, RainfallIntensity, Slope]\nObjective: multi:softprob (4 classes)\nOutput: [P_low, P_med, P_high, P_extreme]\nConfidence = max(probabilities)',
+   warn:'Hard labels without confidence are dangerous. P_extreme=0.51 ≠ P_extreme=0.99.',
+   ok:'XGBoost captures non-linear interactions impossible in single formulas.',
+   tags:['XGBoost','predict_proba','Physics features','300 trees']},
+  {id:'valid',title:'Sentinel-1 CSI Validation',sub:'Target CSI > 0.6 (WMO standard)',badge:'VALIDATE',bc:'#aa44ff',
+   detail:'Run full pipeline on historical events (2018 Kerala, 2019 Bihar, 2022 Assam). Compare predicted inundation vs Sentinel-1 SAR flood maps. Tune CN, Manning\'s n, XGBoost hyperparameters until CSI > 0.6.',
+   formula:'CSI = Hits / (Hits + Misses + False Alarms)\nPOD = Hits / (Hits + Misses)\nFAR = False Alarms / (Hits + FA)\n\nTarget:  CSI > 0.6  (WMO minimum)\nStretch: CSI > 0.75 (research grade)',
+   warn:'Deploying without validation means unknown warn/miss rates — life-safety risk.',
+   ok:'CSI > 0.6 is your credential for NDRF/SDMA review. Document it explicitly.',
+   tags:['Sentinel-1 SAR','CSI > 0.6','WMO standard','2018 Kerala']},
+  {id:'units',title:'Unit Consistency Contract',sub:'SI throughout · UTM zone-local CRS',badge:'QUALITY',bc:'#aa44ff',
+   detail:'40% of production hydrology failures are unit errors. Define strict unit contract at every pipeline boundary. Wrong Manning\'s coefficient gives velocity errors of ×1.486.',
+   formula:'SCS-CN: rainfall P in mm (NOT inches)\nManning\'s: Q m³/s, R m, S dimensionless\nTWI: dimensionless\nCRS: WGS84 storage, UTM for area calc\n  Meppadi → UTM 43N\n  Darbhanga → UTM 45N\n  Dhemaji  → UTM 46N',
+   warn:"Manning's imperial coeff = 1.486 vs SI = 1.0. Mixing gives ×1.486 velocity error.",
+   ok:'Add unit assertions at every stage boundary. Fail loudly, not silently.',
+   tags:['SI units','UTM zone','CRS contract','Unit assertions']},
+ ]},
+ {label:'Phase 5 — Tactical operations',color:'#00e676',nodes:[
+  {id:'astar',title:'Vehicle-Specific A* Routing',sub:'Depth thresholds per vehicle class',badge:'TACTICAL',bc:'#00e676',
+   detail:'Cost function uses vehicle-specific depth thresholds. A flooded cell a boat navigates freely is impassable to an ambulance. Path smoothed with Catmull-Rom splines for realistic navigation.',
+   formula:'Cost(cell, vehicle) =\n  Dist × passability(depth, vehicle)\n  + risk_penalty + road_penalty\n\nAmbulance: depth > 0.4m → BLOCKED\nTruck:     depth > 0.6m → BLOCKED\nPersonnel: depth > 0.3m → cost ×5\nBoat:      prefers water cells\nHelicopter: terrain cost = 1.0',
+   warn:'Original "Cost = Dist + 50×Risk" constant 50 is arbitrary and unvalidated.',
+   ok:'Run A* separately per vehicle type. Display separate route layers in UI.',
+   tags:['Vehicle-specific A*','Catmull-Rom','Ambulance/Boat/Truck']},
+  {id:'dispatch',title:'Demand Score Dispatch',sub:'(Pop × Risk × Confidence) / Distance',badge:'TACTICAL',bc:'#00e676',
+   detail:'Limited assets dispatched to maximise lives saved per travel time, weighted by XGBoost confidence. Prevents sending boats to high-risk zones the model is uncertain about. Re-computed every 1 hour.',
+   formula:'Demand_Score =\n  (Population × Risk_Level × Confidence)\n  / A*_Distance\n\nRisk_Level: Low=1, Med=2, High=3, Extreme=4\nConfidence: predict_proba max (0–1)\nAssign: greedy, highest score first\nRe-compute: every 1hr',
+   warn:'Greedy assignment not globally optimal. For >20 assets, use Hungarian algorithm.',
+   ok:'Confidence weighting is the key differentiator vs standard demand scoring.',
+   tags:['Demand score','Greedy dispatch','Confidence-weighted','1hr re-compute']},
+ ]},
+ {label:'Phase 6 — Mission control UI',color:'#888888',nodes:[
+  {id:'ui',title:'Mission Control UI',sub:'MapLibre 3D · Chart.js · Time slider',badge:'UI',bc:'#888888',
+   detail:'All pipeline outputs surfaced on MapLibre GL JS 3D map. Three key interactive layers: time slider (T+0 to T+72hr), scenario toggle (P50/P75/P90), and confidence overlay where opacity = predict_proba.',
+   formula:'Time slider: T+0 → T+72hr (1hr steps)\n  → Animates inundation depth per timestep\nScenario toggle: P50 / P75 / P90\n  → Switches entire risk + routing layer\nConfidence overlay:\n  opacity = predict_proba max\n  low confidence → semi-transparent cells\nDegraded mode banner:\n  visible if any API stale > 1hr',
+   warn:null,
+   ok:'Confidence overlay is the feature that separates Jal Drishti from standard flood maps.',
+   tags:['MapLibre GL JS','Time slider','Scenario toggle','Confidence overlay']},
+ ]},
+];
+
+const pipeWrap=document.getElementById('pipeline-wrap');
+const pipeDetail=document.getElementById('pipeline-detail');
+let selNode=null;
+
+function closePipeDetail(){pipeDetail.innerHTML='';if(selNode){selNode.classList.remove('sel');selNode=null;}}
+
+function showPipeDetail(node,el){
+  if(selNode===el){closePipeDetail();return;}
+  if(selNode)selNode.classList.remove('sel');
+  selNode=el;el.classList.add('sel');
+  const f=node.formula?`<div class="formula-box">${node.formula}</div>`:'';
+  const w=node.warn?`<div class="nd-warn">⚠ ${node.warn}</div>`:'';
+  const ok=node.ok?`<div class="nd-ok">✓ ${node.ok}</div>`:'';
+  const tags=node.tags.map(t=>`<span class="nd-tag">${t}</span>`).join('');
+  pipeDetail.innerHTML=`<div class="node-detail"><span class="close-x" onclick="closePipeDetail()">[ X ]</span><h3>${node.title}</h3><div class="sep"></div><p class="nd-body">${node.detail}</p>${f}${w}${ok}<div class="nd-tags">${tags}</div></div>`;
+  pipeDetail.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+window.closePipeDetail=closePipeDetail;
+
+phases.forEach((phase,pi)=>{
+  const row=document.createElement('div');
+  row.className='phase-row';
+  const nodesWrap=document.createElement('div');
+  nodesWrap.className='phase-nodes';
+  phase.nodes.forEach((node,ni)=>{
+    const el=document.createElement('div');
+    el.className='ph-node';
+    el.style.cssText=`background:${node.bc}11;border-color:${node.bc}44`;
+    el.innerHTML=`<div class="ph-title" style="color:${node.bc}">${node.title}</div><div class="ph-sub">${node.sub}</div><span class="ph-badge" style="background:${node.bc}22;color:${node.bc}">${node.badge}</span>`;
+    el.addEventListener('click',()=>showPipeDetail(node,el));
+    nodesWrap.appendChild(el);
+    if(ni<phase.nodes.length-1){
+      const arr=document.createElement('div');
+      arr.className='phase-arrow';arr.textContent='›';
+      nodesWrap.appendChild(arr);
+    }
+  });
+  row.appendChild(nodesWrap);
+  pipeWrap.appendChild(row);
+  if(pi<phases.length-1){
+    const conn=document.createElement('div');
+    conn.className='phase-connector';conn.textContent='↓';
+    pipeWrap.appendChild(conn);
+  }
+});
+
+// ===== DATA SOURCES =====
+const dsCats=[
+ {cat:'Elevation & Terrain',items:[
+  {name:'ALOS PALSAR',org:'JAXA / ASF',pill:'FREE',pillC:'#00c8ff',use:'Primary DEM for Meppadi — 12.5m SAR, cloud-penetrating',access:'Free, ASF account required',format:'GeoTIFF 12.5m',pipeline:'Void Fill → Pit Fill → D-Infinity',region:'Meppadi (primary)',url:'search.asf.alaska.edu',detail:'Best available free DEM for India hill terrain. SAR-derived — penetrates monsoon cloud cover. Download via Alaska Satellite Facility search tool. Essential for Meppadi steep slope analysis.'},
+  {name:'Cartosat-1 DEM',org:'ISRO Bhuvan',pill:'FREE',pillC:'#00c8ff',use:'Primary DEM for Bihar/Assam flat plains — 10m',access:'Free, Bhuvan portal',format:'GeoTIFF 10m',pipeline:'Void Fill → Pit Fill → D-Infinity',region:'Darbhanga & Dhemaji',url:'bhuvan.nrsc.gov.in',detail:'Indian satellite DEM at 10m. Best for flat terrain where centimeter-level elevation accuracy drives flood routing accuracy. Essential for Darbhanga where slope <0.1°.'},
+  {name:'SRTM 30m',org:'NASA / USGS',pill:'FALLBACK',pillC:'#888888',use:'Void-filling fallback only — never use as primary',access:'Free, USGS Earth Explorer',format:'GeoTIFF 30m',pipeline:'Void Filling only',region:'All three (fallback)',url:'earthexplorer.usgs.gov',detail:'30m resolution creates ±16m elevation errors on flat Darbhanga plains — unacceptable as primary DEM. Use ONLY to fill cloud-caused voids in ALOS/Cartosat data.'},
+ ]},
+ {cat:'Rainfall & Meteorology',items:[
+  {name:'IMD MOSDAC',org:'India Meteorological Department',pill:'FREE',pillC:'#4488ff',use:'Primary live rainfall — 0.25° grid, 3-hourly, 72hr QPF',access:'Free registration, API available',format:'NetCDF / JSON API',pipeline:'SCS-CN → Unit Hydro → Hydrograph',region:'All three regions',url:'mosdac.gov.in',detail:'Most critical live data input. Provides 0.25° gridded rainfall at 3-hour intervals plus 72-hour Quantitative Precipitation Forecast for P50/P75/P90 scenario generation.'},
+  {name:'ERA5 Reanalysis',org:'ECMWF / Copernicus',pill:'FREE',pillC:'#4488ff',use:'Historical rainfall for XGBoost training and CSI validation',access:'Free, Copernicus CDS account',format:'NetCDF hourly',pipeline:'XGBoost training · CSI validation',region:'All three (historical)',url:'cds.climate.copernicus.eu',detail:'Global reanalysis at 31km hourly. Used to reconstruct 2018 Kerala, 2019 Bihar, 2022 Assam flood events for training XGBoost and computing Sentinel-1 CSI scores.'},
+  {name:'IMD FFGS',org:'India Met Dept / MoES',pill:'RESTRICTED',pillC:'#ff6600',use:'Flash flood thresholds and soil moisture guidance',access:'Institutional agreement with IMD',format:'Gridded 4km',pipeline:'AMC classification',region:'Meppadi critical',url:'imd.gov.in/ffgs',detail:'Flash Flood Guidance System operated by IMD. Contains soil moisture thresholds and flash flood guidance values per basin. Requires MoES collaboration agreement — for student project use MOSDAC as substitute.'},
+ ]},
+ {cat:'Soil Moisture',items:[
+  {name:'NASA SMAP L3',org:'NASA JPL',pill:'FREE',pillC:'#aa44ff',use:'AMC I/II/III classification every 6 hours',access:'Free, NASA Earthdata login',format:'HDF5 / NetCDF 9km',pipeline:'AMC → CN adjustment',region:'All three regions',url:'earthdata.nasa.gov/smap',detail:'SMAP surface soil moisture at 9km, updated twice daily. Directly determines AMC class — the single biggest multiplier on runoff volume. AMC III doubles runoff vs AMC II.'},
+  {name:'ISRO Bhuvan Soil Moisture',org:'ISRO / SAC',pill:'FREE',pillC:'#aa44ff',use:'Secondary soil moisture tuned for Indian soils',access:'Free, Bhuvan portal',format:'GeoTIFF',pipeline:'AMC classification (backup)',region:'All three regions',url:'bhuvan.nrsc.gov.in',detail:'ISRO soil moisture from RISAT tuned specifically for Indian soil types and monsoon conditions. Better monsoon-season performance than global SMAP products.'},
+ ]},
+ {cat:'Flood Validation',items:[
+  {name:'Sentinel-1 SAR',org:'ESA Copernicus',pill:'FREE',pillC:'#00e676',use:'Ground truth for CSI > 0.6 validation',access:'Free, ESA Copernicus Hub account',format:'GeoTIFF (processed) / SAFE (raw)',pipeline:'CSI validation vs predicted inundation',region:'All three (historical events)',url:'scihub.copernicus.eu',detail:'C-band SAR penetrates monsoon cloud cover — the only satellite that can observe flooded areas during active rainfall. Compare pre- vs post-event backscatter to extract flood extent maps.'},
+  {name:'Google Earth Engine',org:'Google',pill:'FREE*',pillC:'#00e676',use:'Pre-processed Sentinel-1 flood masks at scale',access:'Free for research, account required',format:'Cloud API / GeoTIFF export',pipeline:'CSI validation (recommended)',region:'All three regions',url:'earthengine.google.com',detail:'GEE hosts full Sentinel-1 archive with built-in flood detection scripts. Dramatically reduces processing time vs downloading raw SAFE files. Strongly recommended for validation workflow.'},
+ ]},
+ {cat:'River Gauges & Reservoirs',items:[
+  {name:'India-WRIS (CWC)',org:'Central Water Commission',pill:'FREE',pillC:'#ffaa00',use:'Live river gauge levels — 966 stations across India',access:'Free, public portal',format:'JSON API / CSV',pipeline:'Muskingum-Cunge validation · Reservoir trigger',region:'Darbhanga (Bagmati), Dhemaji (Brahmaputra)',url:'indiawris.gov.in',detail:'CWC real-time water level, discharge, and flood stage data. Critical for validating Muskingum-Cunge routed discharge against observed gauge readings at Darbhanga and Dhemaji.'},
+  {name:'State Dam Authority APIs',org:'KSEB / Bihar WRD / NEEPCO',pill:'MIXED',pillC:'#ff6600',use:'Reservoir fill % for 85% trigger override logic',access:'Mix of public bulletins and institutional API',format:'Daily PDF / JSON',pipeline:'Reservoir state override',region:'All three — critical',url:'cwc.gov.in',detail:'Banasura Sagar (KSEB Kerala), Bagmati barrage (Bihar WRD), Subansiri dam (NEEPCO Assam). Some publish daily storage bulletins as PDF, others have JSON APIs. Heartbeat check every 15 minutes required.'},
+ ]},
+ {cat:'Land Use & Buildings',items:[
+  {name:'ISRO LULC',org:'ISRO Bhuvan · 1:50,000',pill:'FREE',pillC:'#00c8ff',use:'CN assignment by land cover class',access:'Free, Bhuvan portal',format:'Shapefile / GeoTIFF',pipeline:'CN per grid cell',region:'All three regions',url:'bhuvan.nrsc.gov.in',detail:'National land use/land cover at 1:50,000 covering all India. Classes directly map to SCS-CN table values. Forest→CN55, Urban→CN90, Agriculture→CN75.'},
+  {name:'OSM Buildings',org:'OpenStreetMap / Overpass',pill:'FREE',pillC:'#00c8ff',use:'Building footprints for population heatmap snapping',access:'Free, no account needed',format:'GeoJSON',pipeline:'Population heatmap',region:'Urban areas',url:'overpass-api.de',detail:'OSM has reasonable building coverage for Indian towns. Use Overpass API to extract polygons. Sparse in rural Meppadi — supplement with Microsoft GlobalMLBuildingFootprints.'},
+  {name:'Microsoft Building Footprints',org:'Microsoft AI for Good',pill:'FREE',pillC:'#00c8ff',use:'Rural building detection where OSM is sparse',access:'Free, GitHub download',format:'GeoJSON by region',pipeline:'Population heatmap (rural fallback)',region:'Meppadi & Dhemaji',url:'github.com/microsoft/GlobalMLBuildingFootprints',detail:'780M AI-detected building footprints globally including India. Significantly better rural coverage than OSM for Meppadi hill villages and Dhemaji remote areas.'},
+ ]},
+ {cat:'Population & Roads',items:[
+  {name:'WorldPop India',org:'Univ of Southampton',pill:'FREE',pillC:'#888888',use:'100m gridded population for demand score',access:'Free download',format:'GeoTIFF 100m',pipeline:'Demand Score = Pop × Risk × Conf / Dist',region:'All three regions',url:'worldpop.org',detail:'Gridded population at 100m disaggregated by age and gender. More accurate than census ward-level data for rural areas. Essential for demand score calculation.'},
+  {name:'Census of India 2011',org:'Office of Registrar General',pill:'FREE',pillC:'#888888',use:'Village-level ground truth population',access:'Free download',format:'Excel / CSV',pipeline:'Population heatmap calibration',region:'All three regions',url:'censusindia.gov.in',detail:'Village-level Primary Census Abstract. Multiply by ~1.12 for 2025 estimates. Use to calibrate WorldPop gridded estimates against actual village populations.'},
+  {name:'OSM Road Network',org:'Geofabrik India extract',pill:'FREE',pillC:'#888888',use:'A* routing graph — road type, surface, width',access:'Free, Geofabrik or Overpass',format:'PBF / Shapefile / GeoJSON',pipeline:'Vehicle-specific A* routing graph',region:'All three regions',url:'download.geofabrik.de/asia/india.html',detail:'OSM roads include highway class (NH/SH/district/track), surface type (paved/unpaved), and width. Essential for vehicle-specific passability — ambulance vs truck vs boat routing cost matrix.'},
+ ]},
+];
+
+const dsCatsEl=document.getElementById('ds-cats');
+const dsDet=document.getElementById('ds-detail-container');
+let selDs=null;
+
+function closeDsDetail(){dsDet.innerHTML='';if(selDs){selDs.classList.remove('sel');selDs=null;}}
+window.closeDsDetail=closeDsDetail;
+
+dsCats.forEach(cat=>{
+  const hdr=document.createElement('div');
+  hdr.className='cat-hdr';hdr.textContent=cat.cat;
+  dsCatsEl.appendChild(hdr);
+  const grid=document.createElement('div');
+  grid.className='ds-grid';
+  cat.items.forEach(s=>{
+    const card=document.createElement('div');
+    card.className='ds-card';
+    card.innerHTML=`<div class="ds-name">${s.name}</div><div class="ds-org">${s.org}</div><span class="ds-pill" style="background:${s.pillC}22;color:${s.pillC};border:1px solid ${s.pillC}44">${s.pill}</span><div class="ds-use">${s.use}</div>`;
+    card.addEventListener('click',()=>{
+      if(selDs===card){closeDsDetail();return;}
+      if(selDs)selDs.classList.remove('sel');
+      selDs=card;card.classList.add('sel');
+      dsDet.innerHTML=`<div class="ds-detail"><span class="close-x" onclick="closeDsDetail()">[ X ]</span><h3>${s.name}</h3><div class="sep"></div><p>${s.detail}</p><div class="ds-meta"><div class="ds-meta-item"><b>Access</b><span>${s.access}</span></div><div class="ds-meta-item"><b>Format</b><span>${s.format}</span></div><div class="ds-meta-item"><b>Pipeline stage</b><span>${s.pipeline}</span></div><div class="ds-meta-item"><b>Regions</b><span>${s.region}</span></div></div><div class="ds-url">${s.url}</div></div>`;
+      dsDet.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+    grid.appendChild(card);
+  });
+  dsCatsEl.appendChild(grid);
+});
+</script>

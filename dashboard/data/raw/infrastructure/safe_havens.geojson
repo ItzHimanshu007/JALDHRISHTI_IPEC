@@ -1,0 +1,81 @@
+{
+  "type": "FeatureCollection",
+  "name": "safe_havens",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "id": "SH001", "name": "Meppadi Community Hospital", "type": "hospital", "village_id": "wayanad_meppadi", "capacity": 200, "elevation_m": 850, "has_helipad": true },
+      "geometry": { "type": "Point", "coordinates": [76.141, 11.558] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH002", "name": "Meppadi Higher Secondary School", "type": "shelter", "village_id": "wayanad_meppadi", "capacity": 500, "elevation_m": 820, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [76.139, 11.570] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH003", "name": "Chooralmala Ridge Point", "type": "high_ground", "village_id": "wayanad_meppadi", "capacity": 150, "elevation_m": 920, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [76.150, 11.575] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH004", "name": "Meppadi Temple Complex", "type": "shelter", "village_id": "wayanad_meppadi", "capacity": 300, "elevation_m": 810, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [76.136, 11.557] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH005", "name": "NH-766 Elevated Bridge", "type": "high_ground", "village_id": "wayanad_meppadi", "capacity": 100, "elevation_m": 880, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [76.125, 11.545] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH101", "name": "Darbhanga Medical College", "type": "hospital", "village_id": "darbhanga", "capacity": 400, "elevation_m": 58, "has_helipad": true },
+      "geometry": { "type": "Point", "coordinates": [85.898, 26.162] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH102", "name": "Darbhanga Raj Fort", "type": "shelter", "village_id": "darbhanga", "capacity": 600, "elevation_m": 55, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [85.905, 26.160] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH103", "name": "Kamla Embankment High Point", "type": "high_ground", "village_id": "darbhanga", "capacity": 200, "elevation_m": 62, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [85.910, 26.145] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH104", "name": "LN Mithila University Campus", "type": "shelter", "village_id": "darbhanga", "capacity": 800, "elevation_m": 56, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [85.892, 26.158] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH105", "name": "NH-57 Elevated Section", "type": "high_ground", "village_id": "darbhanga", "capacity": 150, "elevation_m": 60, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [85.880, 26.140] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH201", "name": "Dhemaji Civil Hospital", "type": "hospital", "village_id": "dhemaji", "capacity": 150, "elevation_m": 82, "has_helipad": true },
+      "geometry": { "type": "Point", "coordinates": [94.558, 27.488] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH202", "name": "Dhemaji College Complex", "type": "shelter", "village_id": "dhemaji", "capacity": 400, "elevation_m": 78, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [94.567, 27.495] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH203", "name": "Jonai Highland Area", "type": "high_ground", "village_id": "dhemaji", "capacity": 250, "elevation_m": 95, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [94.575, 27.500] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH204", "name": "Dhemaji DC Office", "type": "shelter", "village_id": "dhemaji", "capacity": 200, "elevation_m": 76, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [94.562, 27.492] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "SH205", "name": "Simen Chapori Raised Platform", "type": "high_ground", "village_id": "dhemaji", "capacity": 100, "elevation_m": 88, "has_helipad": false },
+      "geometry": { "type": "Point", "coordinates": [94.548, 27.470] }
+    }
+  ]
+}

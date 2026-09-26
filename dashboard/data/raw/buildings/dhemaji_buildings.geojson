@@ -1,0 +1,16 @@
+{
+  "type": "FeatureCollection",
+  "name": "dhemaji_buildings",
+  "features": [
+    { "type": "Feature", "properties": { "id": "B201", "type": "residential", "floors": 1, "area_sqm": 70 }, "geometry": { "type": "Point", "coordinates": [94.560, 27.480] } },
+    { "type": "Feature", "properties": { "id": "B202", "type": "residential", "floors": 1, "area_sqm": 85 }, "geometry": { "type": "Point", "coordinates": [94.565, 27.485] } },
+    { "type": "Feature", "properties": { "id": "B203", "type": "chang_ghar", "floors": 1, "area_sqm": 60 }, "geometry": { "type": "Point", "coordinates": [94.555, 27.478] } },
+    { "type": "Feature", "properties": { "id": "B204", "type": "commercial", "floors": 2, "area_sqm": 150 }, "geometry": { "type": "Point", "coordinates": [94.570, 27.490] } },
+    { "type": "Feature", "properties": { "id": "B205", "type": "institutional", "floors": 2, "area_sqm": 400 }, "geometry": { "type": "Point", "coordinates": [94.562, 27.492] } },
+    { "type": "Feature", "properties": { "id": "B206", "type": "residential", "floors": 1, "area_sqm": 55 }, "geometry": { "type": "Point", "coordinates": [94.548, 27.470] } },
+    { "type": "Feature", "properties": { "id": "B207", "type": "chang_ghar", "floors": 1, "area_sqm": 50 }, "geometry": { "type": "Point", "coordinates": [94.575, 27.475] } },
+    { "type": "Feature", "properties": { "id": "B208", "type": "healthcare", "floors": 1, "area_sqm": 250 }, "geometry": { "type": "Point", "coordinates": [94.558, 27.488] } },
+    { "type": "Feature", "properties": { "id": "B209", "type": "educational", "floors": 2, "area_sqm": 350 }, "geometry": { "type": "Point", "coordinates": [94.567, 27.495] } },
+    { "type": "Feature", "properties": { "id": "B210", "type": "residential", "floors": 1, "area_sqm": 75 }, "geometry": { "type": "Point", "coordinates": [94.552, 27.465] } }
+  ]
+}

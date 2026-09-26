@@ -1,0 +1,56 @@
+# =============================================
+# Jal Drishti - Default Configuration
+# =============================================
+
+project:
+  name: "Jal Drishti"
+  version: "1.0.0"
+  description: "AI-Driven Flood Intelligence & Mission Control"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "http://localhost:8001"
+  rate_limit: 100  # requests per minute
+
+simulation:
+  grid_resolution_m: 40
+  time_steps: [0, 4, 8, 12, 16, 20, 24]  # hours
+  default_rainfall_mm: 50
+  max_rainfall_mm: 500
+  risk_thresholds:
+    low: 0.0
+    medium: 0.30
+    high: 0.50
+    extreme: 0.70
+
+pathfinding:
+  algorithm: "astar"
+  danger_threshold: 0.70
+  risk_weight_multiplier: 25
+  max_safe_havens: 5
+  smoothing: "catmull_rom"
+
+model:
+  risk_scorer:
+    version: "v2.1"
+    weights:
+      water_depth: 0.40
+      slope: 0.25
+      flow_accumulation: 0.25
+      proximity: 0.10
+  population_clustering:
+    method: "DBSCAN"
+    eps_km: 0.5
+    min_samples: 10
+
+weather:
+  provider: "open-meteo"
+  base_url: "https://api.open-meteo.com/v1/forecast"
+  forecast_days: 7
+  cache_ttl_seconds: 600
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"

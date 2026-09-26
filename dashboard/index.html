@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jal Drishti - Mission Control</title>
+    <!-- MapLibre -->
+    <script src='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
+    <!-- Bench/Font -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css?v=4.2">
+</head>
+
+<body>
+    <!-- 1. The Map (Background) -->
+    <div id="map"></div>
+
+    <!-- 2. Floating HUD Interface -->
+    <div class="hud-container">
+
+        <!-- Header -->
+        <div class="hud-header pointer-events-auto">
+            <div class="brand">Jal Drishti
+                <div class="scan-line"></div>
+            </div>
+            <div class="nav-links" id="main-nav-links">
+                <!-- Populated by nav.js: shows every other page's link, never the current one -->
+            </div>
+            <div class="system-status">
+            </div>
+        </div>
+
+        <!-- Left Command Panel -->
+        <div class="hud-left pointer-events-auto">
+            <!-- Location Selector -->
+            <div class="glass-panel">
+                <div class="panel-header">
+                    LOCATION
+                </div>
+
+                <div class="location-select-row">
+                    <span class="location-pin" aria-hidden="true">📍</span>
+                    <select id="villageSelector">
+                        <option value="wayanad_meppadi">Meppadi (Kerala)</option>
+                        <option value="darbhanga">Darbhanga (Bihar)</option>
+                        <option value="dhemaji">Dhemaji (Assam)</option>
+                    </select>
+                </div>
+                <div id="villageInfo" style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px;">
+                    <span style="font-size:0.7rem; color:var(--text-muted);">--</span>
+                    <button id="btnGenerateReport" class="action-btn"
+                        style="width:auto; margin:0; padding:6px 12px; font-size:0.65rem; background:linear-gradient(135deg, rgba(34, 211, 238, 0.35) 0%, rgba(59, 130, 246, 0.25) 100%); border-color:rgba(34, 211, 238, 0.4);">
+                        📥 Download Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Current Weather Conditions -->
+            <div class="glass-panel weather-conditions-panel" id="currentConditionsPanel">
+                <div class="panel-header">
+                    CURRENT CONDITIONS
+                    <span class="panel-subtitle" id="weatherUpdatedAt">--:--</span>
+                </div>
+
+                <div class="weather-primary-row">
+                    <div class="weather-icon-large" id="weatherIcon">☀️</div>
+                    <div class="weather-primary-info">
+                        <div class="weather-temp" id="weatherTemp">--°C</div>
+                        <div class="weather-desc" id="weatherDesc">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="weather-rain-highlight" id="weatherRainRow">
+                    <span class="weather-rain-icon" aria-hidden="true">💧</span>
+                    <div class="weather-rain-values">
+                        <span class="weather-rain-amount" id="weatherRain">0.0</span>
+                        <span class="weather-rain-unit">mm/hr</span>
+                    </div>
+                    <span class="weather-rain-label">RAINFALL</span>
+                </div>
+
+                <div class="weather-stats-row">
+                    <div class="weather-stat">
+                        <span class="weather-stat-icon" aria-hidden="true">💦</span>
+                        <span class="weather-stat-value" id="weatherHum">--%</span>
+                        <span class="weather-stat-label">Humidity</span>
+                    </div>
+                    <div class="weather-stat">
+                        <span class="weather-stat-icon" aria-hidden="true">💨</span>
+                        <span class="weather-stat-value" id="weatherWind">-- km/h</span>
+                        <span class="weather-stat-label">Wind</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resource Allocation Panel -->
+            <div class="glass-panel" id="resourceAllocationPanel"
+                style="border-left: 3px solid var(--accent-tertiary);">
+                <div class="panel-header">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="layer-icon">🎯</span> RESOURCE ALLOCATION
+                    </span>
+                    <span class="model-version">PRIORITY-RANKED</span>
+                </div>
+
+                <div class="resource-stats-grid" id="resource-coverage">
+                    <!-- Populated by JS -->
+                </div>
+
+                <div class="mission-control-section" style="margin-top:16px;">
+                    <div class="label-tiny" style="color:var(--accent-primary); letter-spacing:1px; margin-bottom:8px;">
+                        ACTIVE DEPLOYMENT SCHEDULE</div>
+                    <div id="deployment-missions" class="scroll-container"
+                        style="max-height:220px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:5px;">
+                        <!-- Mission cards / solver progress populated by JS -->
+                        <div style="text-align:center; padding:18px 10px; color:var(--text-muted); font-size:0.65rem; line-height:1.5;">
+                            Ranks rescue assets against flood-exposed zones by population,
+                            severity, model confidence and travel time.<br>Requires an active
+                            rainfall simulation.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="optimization-controls" style="display:flex; gap:8px; margin-top:12px;">
+                    <button id="btnStartOptimization" class="action-btn"
+                        style="flex:1; background:linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(139, 92, 246, 0.2) 100%); border-color:rgba(139, 92, 246, 0.5);"
+                        onclick="optimizeAllocation()">
+                        ⚡ START OPTIMIZATION
+                    </button>
+                    <button id="btnStopOptimization" class="action-btn"
+                        style="flex:1; display:none; background:linear-gradient(135deg, rgba(239, 68, 68, 0.4) 0%, rgba(239, 68, 68, 0.2) 100%); border-color:rgba(239, 68, 68, 0.5); color:#fca5a5;"
+                        onclick="stopOptimization()">
+                        🛑 STOP
+                    </button>
+                </div>
+
+                <!-- Deployment Report Download -->
+                <button id="btnDownloadDeploymentReport" class="action-btn"
+                    style="width:100%; margin-top:8px; background:linear-gradient(135deg, rgba(34, 211, 238, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%); border-color:rgba(34, 211, 238, 0.4);"
+                    onclick="generateDeploymentReport()">
+                    📋 DOWNLOAD DEPLOYMENT REPORT
+                </button>
+
+                <!-- Phase Summary -->
+                <div id="deployment-phase-summary" style="display:flex; flex-direction:column; gap:4px; margin-top:12px;">
+                    <!-- Populated by JS after optimization -->
+                </div>
+
+                <div id="deployment-recommendations" style="margin-top:12px;">
+                    <!-- Alerts populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Command Panel -->
+        <div class="hud-right pointer-events-auto">
+
+            <!-- Deep Scan Inspector -->
+            <div id="cellInspector" class="glass-panel"
+                style="display:none; border-left: 3px solid var(--accent-primary); position: relative; overflow: hidden;">
+                <div class="scanning-indicator"></div>
+                <div class="panel-header">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="layer-icon">🔍</span> Location Details
+                    </span>
+                    <button onclick="closeInspector()"
+                        style="border:none; background:none; color:var(--text-muted); cursor:pointer; font-size: 1.2rem;">✕</button>
+                </div>
+
+                <div id="inspectTerrainType"
+                    style="font-family: var(--font-tech); font-size: 0.9rem; color: var(--accent-secondary); margin-bottom: 12px; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                    --</div>
+
+                <div class="inspector-grid">
+                    <div class="inspector-item">
+                        <div class="label-tiny">ELEVATION</div>
+                        <div class="val-mono" id="inspectElev">--</div>
+                    </div>
+                    <div class="inspector-item">
+                        <div class="label-tiny">WATER DEPTH</div>
+                        <div class="val-mono" id="inspectDepth">--</div>
+                    </div>
+                    <div class="inspector-item">
+                        <div class="label-tiny">POPULATION AT RISK</div>
+                        <div class="val-mono" id="inspectPopAtRisk" style="color: #f97316;">--</div>
+                    </div>
+                    <div class="inspector-item">
+                        <div class="label-tiny">DENSITY</div>
+                        <div class="val-mono" id="inspectDensity">--</div>
+                    </div>
+                </div>
+
+                <div
+                    style="margin-top:15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div class="label-tiny">RISK ASSESSMENT</div>
+                    <div id="inspectRisk"
+                        style="font-size:1.3rem; font-weight:700; color:var(--text-muted); letter-spacing:1px; margin: 4px 0;">
+                        SCANNING...</div>
+                    <div class="risk-bar"
+                        style="height:6px; width:100%; background:#1e293b; margin-top:8px; border-radius:10px; position:relative; overflow: hidden;">
+                        <div class="risk-marker"
+                            style="position:absolute; width:100%; height:100%; background:var(--accent-primary); left:-100%; transition:left 0.5s cubic-bezier(0.4, 0, 0.2, 1);">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="inspectRiskFactors" style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;"></div>
+
+                <div id="inspectEvacuation"
+                    style="margin-top:12px; padding:10px; background:rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.2); border-left:3px solid #ef4444; font-size:0.75rem; color: #fca5a5; display:none; line-height: 1.4;">
+                    --
+                </div>
+            </div>
+
+            <!-- Layer Controls -->
+            <div class="glass-panel">
+                <div class="panel-header">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="layer-icon">🗺️</span> Map Layers
+                    </span>
+                    <button id="exitFocusModeBtn" class="focus-exit-btn" type="button"
+                        title="Show the full dashboard again">✕ Show Dashboard</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+
+                    <button id="btnFindRescue" class="layer-btn" onclick="toggleRescueMode()">
+                        <span class="layer-icon">🛟</span> Find Best Rescue Path
+                    </button>
+                    <button id="btnLayerRisk" class="layer-btn active"
+                        onclick="setupLayerToggle('btnLayerRisk', 'flood-risk-layer')">
+                        <span class="layer-icon">🌊</span> Flood Risk Grid
+                    </button>
+                    <button id="btnLayerPopHeatmap" class="layer-btn" onclick="togglePopulationHeatmap()">
+                        <span class="layer-icon">🔥</span> Population Heatmap
+                    </button>
+                </div>
+
+                <!-- Heatmap Legend (Hidden by default) -->
+                <div id="heatmapLegend"
+                    style="display:none; margin-top:12px; padding:10px; background:rgba(0,0,0,0.3); border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">
+                        POPULATION DENSITY</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div
+                            style="width:100%; height:12px; border-radius:6px; background: linear-gradient(to right, rgba(0,255,0,0.8), rgba(255,255,0,0.9), rgba(255,100,0,1), rgba(230,0,0,1));">
+                        </div>
+                    </div>
+                    <div
+                        style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-muted); margin-top:4px;">
+                        <span>Low</span>
+                        <span>Medium</span>
+                        <span>High</span>
+                        <span>Critical</span>
+                    </div>
+                    <div style="font-size:0.6rem; color:var(--accent-secondary); margin-top:8px; line-height:1.3;">
+                        🔴 Red zones require immediate evacuation priority
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Weather & Time Control -->
+        <div class="hud-bottom pointer-events-auto">
+
+            <!-- Day Selector + Hourly Timeline -->
+            <div class="weather-time-panel glass-panel" id="weatherTimePanel">
+                <div class="day-selector" id="daySelector"></div>
+                <div class="hourly-scroll">
+                    <div class="hourly-timeline" id="hourlyTimeline"></div>
+                </div>
+            </div>
+
+            <!-- Toggle for the Day Selector + Hourly Timeline panel above, sitting
+                 outside the player bar to its left (mirrors where it used to sit
+                 outside the bar on the right). -->
+            <div class="bottom-control-row">
+                <button class="forecast-toggle-btn active" id="forecastToggleBtn" type="button"
+                    aria-expanded="true" aria-controls="weatherTimePanel" aria-label="Toggle live forecast panel">
+                    <span class="status-dot live"></span>
+                    <span class="forecast-toggle-label">LIVE FORECAST</span>
+                    <span class="forecast-toggle-icon">▾</span>
+                </button>
+
+                <!-- Simulation Player (rainfall input + auto-play; retained from the existing flood engine) -->
+                <div class="player-bar">
+                    <button class="play-btn-circle" id="masterPlayBtn">▶</button>
+
+                    <!-- Rainfall Input -->
+                    <div class="rainfall-control">
+                        <div class="control-label">RAINFALL INPUT</div>
+                        <div class="control-wrapper">
+                            <input type="range" id="rainfallSlider" min="0" max="300" value="50">
+                            <span id="rainfallValue">50 mm</span>
+                        </div>
+                    </div>
+
+                    <!-- Time-selecting section (original flood-simulation scrubber, restored as-is) -->
+                    <div class="simulation-meta">
+                        <div class="meta-header">
+                            <span class="meta-label">FLOOD SIMULATION</span>
+                            <span id="timeDisplay">+0h</span>
+                        </div>
+                        <div class="timeline-track">
+                            <div class="timeline-fill" id="timelineFill"></div>
+                        </div>
+                        <div class="timeline-ticks">
+                            <div class="tick active" data-t="0">START</div>
+                            <div class="tick" data-t="1">+4h</div>
+                            <div class="tick" data-t="2">+8h</div>
+                            <div class="tick" data-t="3">+12h</div>
+                            <div class="tick" data-t="4">+16h</div>
+                            <div class="tick" data-t="5">+20h</div>
+                            <div class="tick" data-t="6">24h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulation Report Panel (Hidden by default) -->
+            <div id="simulationReport" class="glass-panel" style="display:none; margin-top:10px; padding:15px;">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>📊 Simulation Report</span>
+                    <button id="closeReport"
+                        style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem;">✕</button>
+                </div>
+                <div id="reportContent" style="margin-top:10px; font-size:0.8rem; line-height:1.6;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div style="text-align: center;">
+            <div
+                style="font-family: var(--font-tech, 'Rajdhani', sans-serif); font-size: 1.5rem; color: #22d3ee; margin-bottom: 10px;">
+                Jal Drishti</div>
+            <div style="font-size: 0.9rem; color: #94a3b8;">Initializing Mission Control...</div>
+            <div
+                style="margin-top: 20px; width: 40px; height: 40px; border: 3px solid rgba(34, 211, 238, 0.3); border-top-color: #22d3ee; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto;">
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+
+    <script src="js/nav.js?v=1.0"></script>
+    <script src="js/voice-settings.js?v=1.0"></script>
+    <script src="js/reports-store.js?v=1.0"></script>
+    <script src="js/voice-service.js?v=1.0"></script>
+    <script src="js/enhanced.js?v=3.9"></script>
+    <script src="js/weather-time-panel.js?v=1.6"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            JalDrishtiNav.renderNav('#main-nav-links', 'dashboard');
+        });
+    </script>
+</body>
+
+</html>

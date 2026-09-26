@@ -1,0 +1,20 @@
+# =============================================
+# Jal Drishti - Vercel Deployment Dependencies
+# =============================================
+# A trimmed subset of requirements.txt containing only what main.py /
+# src/api_server.py actually import at runtime (verified via grep across
+# src/*.py and main.py - see below). requirements.txt's geopandas/fiona/
+# rasterio/pyproj/shapely/matplotlib/seaborn/folium are unused by any
+# currently-running code path (confirmed nothing in src/, main.py, tests/,
+# scripts/, or notebooks/ imports them) and geopandas' fiona dependency
+# needs a system GDAL install to build - it fails outright in Vercel's
+# Python build environment (and locally, without GDAL, the same way).
+# Use this file for the Vercel build so it doesn't try to compile those.
+
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.24.0
+numpy>=1.24.0
+scipy>=1.10.0

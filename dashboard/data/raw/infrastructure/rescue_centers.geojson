@@ -1,0 +1,36 @@
+{
+  "type": "FeatureCollection",
+  "name": "rescue_centers",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "id": "RC001", "name": "Meppadi NDRF Base Camp", "village_id": "wayanad_meppadi", "type": "ndrf", "resources": { "boats": 5, "ambulances": 3, "personnel": 40 }, "contact": "+91-4936-XXX001" },
+      "geometry": { "type": "Point", "coordinates": [76.145, 11.565] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "RC002", "name": "Meppadi Fire Station", "village_id": "wayanad_meppadi", "type": "fire_station", "resources": { "boats": 2, "ambulances": 1, "personnel": 15 }, "contact": "+91-4936-XXX002" },
+      "geometry": { "type": "Point", "coordinates": [76.130, 11.550] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "RC101", "name": "Darbhanga SDRF Unit", "village_id": "darbhanga", "type": "sdrf", "resources": { "boats": 8, "ambulances": 4, "personnel": 60 }, "contact": "+91-6272-XXX001" },
+      "geometry": { "type": "Point", "coordinates": [85.910, 26.165] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "RC102", "name": "Darbhanga Red Cross Center", "village_id": "darbhanga", "type": "ngo", "resources": { "boats": 3, "ambulances": 2, "personnel": 25 }, "contact": "+91-6272-XXX002" },
+      "geometry": { "type": "Point", "coordinates": [85.885, 26.148] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "RC201", "name": "Dhemaji NDRF Forward Base", "village_id": "dhemaji", "type": "ndrf", "resources": { "boats": 6, "ambulances": 2, "personnel": 35 }, "contact": "+91-3753-XXX001" },
+      "geometry": { "type": "Point", "coordinates": [94.570, 27.498] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "RC202", "name": "Dhemaji Army Relief Camp", "village_id": "dhemaji", "type": "army", "resources": { "boats": 10, "ambulances": 3, "personnel": 80 }, "contact": "+91-3753-XXX002" },
+      "geometry": { "type": "Point", "coordinates": [94.555, 27.478] }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "type": "FeatureCollection",
+  "name": "darbhanga_buildings",
+  "features": [
+    { "type": "Feature", "properties": { "id": "B101", "type": "residential", "floors": 1, "area_sqm": 80 }, "geometry": { "type": "Point", "coordinates": [85.890, 26.150] } },
+    { "type": "Feature", "properties": { "id": "B102", "type": "residential", "floors": 2, "area_sqm": 120 }, "geometry": { "type": "Point", "coordinates": [85.895, 26.155] } },
+    { "type": "Feature", "properties": { "id": "B103", "type": "commercial", "floors": 2, "area_sqm": 200 }, "geometry": { "type": "Point", "coordinates": [85.900, 26.152] } },
+    { "type": "Feature", "properties": { "id": "B104", "type": "residential", "floors": 1, "area_sqm": 70 }, "geometry": { "type": "Point", "coordinates": [85.885, 26.148] } },
+    { "type": "Feature", "properties": { "id": "B105", "type": "institutional", "floors": 3, "area_sqm": 450 }, "geometry": { "type": "Point", "coordinates": [85.905, 26.160] } },
+    { "type": "Feature", "properties": { "id": "B106", "type": "residential", "floors": 1, "area_sqm": 65 }, "geometry": { "type": "Point", "coordinates": [85.880, 26.140] } },
+    { "type": "Feature", "properties": { "id": "B107", "type": "residential", "floors": 2, "area_sqm": 110 }, "geometry": { "type": "Point", "coordinates": [85.910, 26.145] } },
+    { "type": "Feature", "properties": { "id": "B108", "type": "healthcare", "floors": 2, "area_sqm": 300 }, "geometry": { "type": "Point", "coordinates": [85.898, 26.162] } },
+    { "type": "Feature", "properties": { "id": "B109", "type": "educational", "floors": 2, "area_sqm": 380 }, "geometry": { "type": "Point", "coordinates": [85.892, 26.158] } },
+    { "type": "Feature", "properties": { "id": "B110", "type": "residential", "floors": 1, "area_sqm": 90 }, "geometry": { "type": "Point", "coordinates": [85.875, 26.135] } },
+    { "type": "Feature", "properties": { "id": "B111", "type": "religious", "floors": 1, "area_sqm": 150 }, "geometry": { "type": "Point", "coordinates": [85.903, 26.155] } },
+    { "type": "Feature", "properties": { "id": "B112", "type": "residential", "floors": 2, "area_sqm": 100 }, "geometry": { "type": "Point", "coordinates": [85.888, 26.170] } }
+  ]
+}
