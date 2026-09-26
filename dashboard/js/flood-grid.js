@@ -29,7 +29,8 @@
     let stats = [];
     let visible = true;
     let hoverId = null;
-    let labels = [];              // HTML markers with hexagon IDs, shown when zoomed in
+    let labels = [];
+    let columns = true;           // 3D risk columns on/off              // HTML markers with hexagon IDs, shown when zoomed in
     let popup = null;
 
     function rowLabel(n) {
@@ -218,6 +219,19 @@
                     'line-width': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['boolean', ['feature-state', 'hover'], false], 2.2, 0.6], 13, ['case', ['boolean', ['feature-state', 'hover'], false], 3, 1.2]]
                 }
             }, before);
+            // 3D risk columns: moderate-and-worse hexagons rise with their risk index,
+            // so the flood reads in 3D even on the flat Bihar / Assam plains
+            map.addLayer({
+                id: 'flood-grid-3d', type: 'fill-extrusion', source: 'flood-grid-src',
+                layout: { visibility: visible && columns ? 'visible' : 'none' },
+                paint: {
+                    'fill-extrusion-color': ['match', ['coalesce', ['feature-state', 'risk'], 0], 2, RISK_COLOR[2], 3, RISK_COLOR[3], 4, RISK_COLOR[4], RISK_COLOR[1]],
+                    'fill-extrusion-height': ['coalesce', ['feature-state', 'h'], 0],
+                    'fill-extrusion-base': 0,
+                    'fill-extrusion-opacity': 0.78,
+                    'fill-extrusion-vertical-gradient': true
+                }
+            });
             map.on('zoomend', syncLabels);
             map.on('mousemove', 'flood-grid-fill', onHover);
             map.on('mouseleave', 'flood-grid-fill', onLeave);
@@ -273,7 +287,10 @@
         compute();
         if (!force && appliedKey === statsKey) return;
         appliedKey = statsKey;
-        stats.forEach((s, idx) => map.setFeatureState({ source: 'flood-grid-src', id: idx }, { risk: s.risk }));
+        // column height: proportional to the risk index, scaled to the hexagon size
+        const hMax = grid.R * 1000 * 1.4;
+        stats.forEach((s, idx) => map.setFeatureState({ source: 'flood-grid-src', id: idx },
+            { risk: s.risk, h: s.risk >= 2 && s.t > 0 ? Math.max(0.05, Math.pow(s.index / 100, 1.6)) * hMax * (s.risk === 2 ? 0.55 : 1) : 0 }));
         labels.forEach(l => { const r = stats[l.idx] ? stats[l.idx].risk : 0; if (l.el.dataset.risk !== String(r)) l.el.dataset.risk = r; });
         if (labels.length) syncLabels();
         if (window.FloodRender) FloodRender.invalidate();
@@ -362,6 +379,7 @@
         visible = v;
         syncLabels();
         ['flood-grid-fill', 'flood-grid-line'].forEach(id => { if (map && map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v ? 'visible' : 'none'); });
+        if (map && map.getLayer('flood-grid-3d')) map.setLayoutProperty('flood-grid-3d', 'visibility', v && columns ? 'visible' : 'none');
         if (!v) onLeave();
     }
 
@@ -379,6 +397,10 @@
             requestAnimationFrame(loop);
         },
         setVisible,
+        setColumns(on) {
+            columns = on;
+            if (map && map.getLayer('flood-grid-3d')) map.setLayoutProperty('flood-grid-3d', 'visibility', visible && on ? 'visible' : 'none');
+        },
         get visible() { return visible; },
         /** Hexagon index at a point, or -1. */
         hexAt(lng, lat) {
