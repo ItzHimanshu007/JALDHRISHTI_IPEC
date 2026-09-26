@@ -1,9 +1,11 @@
 # Rain-flood simulation
 
-The dashboard runs a 2D shallow-water model live in the browser. Terrain is
-real (SRTM via AWS Terrarium tiles); rainfall, river flows, breach and slope-
-failure timings are **synthetic** and scale with the storm total set in the
-player bar.
+The dashboard runs a 2D shallow-water model live in the browser over each
+village's **whole administrative area** (Meppadi panchayat at 100 m cells;
+Darbhanga and Dhemaji districts, ~2,500 km² each, at 320 m / 400 m cells).
+Terrain is real (SRTM via AWS Terrarium tiles); rainfall, river flows, breach
+and slope-failure timings are **synthetic** and scale with the storm total set
+in the player bar.
 
 ## Pieces
 
@@ -14,6 +16,7 @@ player bar.
 | `dashboard/js/flood-scenarios.js` | One scenario per village (below). |
 | `dashboard/js/flood-sim.js` | Runtime: worker, frames, scenario clock, exposure / facility / gauge stats, event detection, alert level, `riskAt()` used by evacuation routing and deployment planning. |
 | `dashboard/js/flood-render.js` | Water surface draped on the 3D terrain (depth + sediment colour, flow-advected ripples, white water), flow streaks, unstable-slope hatch, rain overlay, map pins. |
+| `dashboard/js/flood-grid.js` | Hexagonal risk grid (~220 hexagons per area, IDs like `DBG-F12`, A = northernmost row): water accumulated, mean/max depth, % flooded, residents, people in water > 30 cm and in deep/fast water, rain received, risk class and index. Hover card on the map; full readout on click; ranked list in the Grid cells tab. |
 | `dashboard/js/ops-ui.js` | Panels: KPIs, gauge chart, timeline, event log, settlements / facilities, point readout, layer switches. |
 
 ## Scenarios
@@ -23,14 +26,20 @@ player bar.
   pore pressure from cumulative rain) decides whether the scarp above
   Punchirimattam fails (from about 120 mm/24 h). The debris volume is routed
   down the real valley through Mundakkai and Chooralmala.
-- **Darbhanga: embankment breach + drainage congestion.** Upstream rain raises
-  the Kamla-Balan through a unit hydrograph. After 1.5 h above Danger Level + 0.25 m
-  the west embankment breaches at Khutwara; outflow is a widening broad-crested
-  weir. The east and north sides are closed (embankment), and city drains drop to
-  15 % once the river is above its outfalls.
-- **Dhemaji: flash tributaries + backwater.** Three north-bank tributaries are
-  found from drainage area on the northern edge and carry silt-laden flash
-  surges. The southern boundary is held up by a rising Brahmaputra stage.
+- **Darbhanga: embanked rivers, breaches, drainage congestion.** Rivers entering
+  from the Nepal side are found from drainage area on the north/west edges and
+  traced downstream; each gets a carved channel and embankments on both banks.
+  Every major river has a breach site (the reach nearest Darbhanga town, and the
+  weakest bank elsewhere) that fails **dynamically inside the solver** after an
+  hour above Danger Level. Sluices close at T+6 h, so rain trapped between
+  embankments ponds across the plain.
+- **Dhemaji: Brahmaputra + flash tributaries.** The Brahmaputra enters from the
+  east edge and rises through the day; north-bank tributaries are injected
+  where they leave the foothills and carry silt-laden flash surges. Drowned
+  outfalls spread water in wide sheets.
+
+Population per cell comes from the dashboard's density model (district census
+density plus named settlements); permanent river channels hold no residents.
 
 ## Checks
 

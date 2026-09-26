@@ -748,12 +748,15 @@ function updateMapVision(village) {
     if (appState._lastFlownVillageId !== appState.currentVillageId) {
         if (appState.moveDebounceTimeout) clearTimeout(appState.moveDebounceTimeout);
         appState.moveDebounceTimeout = setTimeout(() => {
-            appState.map.flyTo({
-                center: coords,
-                zoom: 13.5,
-                pitch: 65,
-                essential: true
-            });
+            // Frame the whole village so the full-area flood simulation is visible
+            if (!(window.OpsUI && OpsUI.fitArea(appState.currentVillageId))) {
+                appState.map.flyTo({
+                    center: coords,
+                    zoom: 13.5,
+                    pitch: 65,
+                    essential: true
+                });
+            }
             appState._lastFlownVillageId = appState.currentVillageId;
         }, 50);
     }

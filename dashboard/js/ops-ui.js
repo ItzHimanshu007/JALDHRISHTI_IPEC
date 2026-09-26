@@ -79,7 +79,12 @@
             kpi('Inundated area', d ? d.wetKm2.toFixed(1) : '0.0', 'km²', d && p ? r1(d.wetKm2 - p.wetKm2) : null),
             kpi('People in water > 30 cm', d ? fmtInt(d.exposed) : '0', '', d && p ? d.exposed - p.exposed : null, d && d.exposed >= 1000 ? 'orange' : null),
             kpi('At risk to life', d ? fmtInt(d.lifeRisk) : '0', '', null, d && d.lifeRisk > 0 ? 'red' : null),
-            kpi('Deepest water', d ? d.maxDepth.toFixed(1) : '0.0', 'm', null),
+            (() => {
+                const g = window.FloodGrid && FloodGrid.summary();
+                const hi = g ? g.counts[3] + g.counts[4] : 0;
+                return kpi('Grid cells high / severe', g ? `${hi}/${g.total}` : '--', '', null, g && g.counts[4] ? 'red' : (hi ? 'orange' : null))
+                    .replace('</div></div>', `</div><div class="kpi__delta">deepest water ${d ? d.maxDepth.toFixed(1) : '0.0'} m</div></div>`);
+            })(),
             kpi('Rain now', s.rainNow.toFixed(1), 'mm/h', null, s.rainNow >= 35 ? 'orange' : null)
                 .replace('</div></div>', `</div><div class="kpi__delta">${Math.round(s.rainSoFar)} mm since T+0</div></div>`),
             kpi('Facilities affected', `${affected}/${fac.length}`, '', null, affected ? 'orange' : null)
@@ -241,6 +246,15 @@
         const key = `${FloodSim.state.runId}:${d ? d.t : -1}:${FloodSim.state.facilityCells.length}`;
         if (!force && key === lastListKey) return;
         lastListKey = key;
+        if (window.FloodGrid) {
+            const ranked = FloodGrid.ranked(15);
+            $('opsGridList').innerHTML = ranked.length ? ranked.map(r => `
+                <div class="xrow" data-hex="${r.idx}">
+                    <span class="xrow__name mono">${r.hex.id}</span><span class="risk-chip" data-risk="${r.s.risk}">${FloodGrid.RISK[r.s.risk]} · ${r.s.index}</span>
+                    <span class="xrow__sub">${r.s.maxDepth.toFixed(1)} m max · ${Math.round(r.s.wetFrac * 100)}% flooded · ${(r.s.volume / 1e6).toFixed(2)} M m³</span>
+                    <span class="xrow__sub mono">${fmtInt(r.s.atRisk)} at risk</span>
+                </div>`).join('') : '<div class="empty-note">No grid cell has standing water yet.</div>';
+        }
         const rows = d ? Object.entries(d.perCluster).sort((a, b) => b[1].people - a[1].people).slice(0, 10) : [];
         const top = rows.length ? rows[0][1].people : 1;
         $('opsSettlements').innerHTML = rows.length ? rows.map(([name, c]) => `
@@ -266,6 +280,9 @@
         if (!inspectLngLat) return;
         const r = FloodSim.sample(inspectLngLat.lng, inspectLngLat.lat);
         const body = $('simInspectorBody');
+        const hexIdx = window.FloodGrid ? FloodGrid.hexAt(inspectLngLat.lng, inspectLngLat.lat) : -1;
+        const hexHtml = hexIdx >= 0 ? `<div class="inspector-section"><div class="inspector-section__title">Grid cell</div>${FloodGrid.card(hexIdx)}</div>` : '';
+        $('simInspectorTitle').textContent = hexIdx >= 0 ? `Readout · ${FloodGrid.hex(hexIdx).id}` : 'Point readout';
         if (!r) {
             body.innerHTML = '<div class="empty-note">Outside the simulated area.</div>';
             return;
@@ -279,7 +296,7 @@
         const vid = appState.currentVillageId;
         const t = FloodSim.state.terrain;
         const people = typeof estimateAmbientPopulationDensity === 'function' ? estimateAmbientPopulationDensity(inspectLngLat.lng, inspectLngLat.lat, vid) * t.cellKm2 : null;
-        body.innerHTML = `
+        body.innerHTML = hexHtml + `<div class="inspector-section"><div class="inspector-section__title">This point (${Math.round(t.dx)} m model cell)</div>
             <dl class="readout">
                 <dt>Water depth now</dt><dd class="mono">${r.depth.toFixed(2)} m</dd>
                 <dt>Flow speed</dt><dd class="mono">${r.speed.toFixed(1)} m/s</dd>
@@ -291,7 +308,7 @@
                 ${people !== null ? `<dt>Residents in cell</dt><dd class="mono">~${fmtInt(people)}</dd>` : ''}
             </dl>
             <div class="callout ${cls}">${advice}</div>
-            <div class="empty-note mono">${inspectLngLat.lat.toFixed(4)}, ${inspectLngLat.lng.toFixed(4)}</div>`;
+            <div class="empty-note mono">${inspectLngLat.lat.toFixed(4)}, ${inspectLngLat.lng.toFixed(4)}</div></div>`;
     }
 
     function openInspector(lngLat) {
@@ -381,10 +398,11 @@
         slider.addEventListener('input', () => setStorm(Number(slider.value)));
         $('stormPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setStorm(Number(b.dataset.mm), true); });
 
-        ['layerWater', 'layerFlow', 'layerRain', 'layerSlope'].forEach(id => {
+        ['layerWater', 'layerFlow', 'layerRain', 'layerSlope', 'layerGrid'].forEach(id => {
             $(id).addEventListener('click', () => {
                 const on = !$(id).classList.contains('active');
                 $(id).classList.toggle('active', on);
+                if (id === 'layerGrid') { FloodGrid.setVisible(on); $('gridLegend').hidden = !on; return; }
                 FloodRender.set($(id).dataset.layer, on);
                 if (id === 'layerWater') $('waterLegend').hidden = !on;
             });
@@ -401,6 +419,7 @@
             const b = e.target.closest('button'); if (!b) return;
             [...$('opsExposureTabs').children].forEach(x => x.classList.toggle('active', x === b));
             $('opsSettlements').hidden = b.dataset.tab !== 'settlements';
+            $('opsGridList').hidden = b.dataset.tab !== 'grid';
             $('opsFacilities').hidden = b.dataset.tab !== 'facilities';
         });
 
@@ -415,6 +434,11 @@
             const el = e.target.closest('[data-cluster]'); if (!el) return;
             const p = FloodSim.state.popPoints.find(pp => pp.cluster === el.dataset.cluster);
             if (p) flyTo(FloodSim.state.terrain.toLngLat(p.cell), 15);
+        });
+        $('opsGridList').addEventListener('click', (e) => {
+            const el = e.target.closest('[data-hex]'); if (!el) return;
+            const h = FloodGrid.hex(Number(el.dataset.hex));
+            if (h) { flyTo(h.center, 12.5); openInspector({ lng: h.center[0], lat: h.center[1] }); }
         });
         $('opsFacilities').addEventListener('click', (e) => {
             const el = e.target.closest('[data-fac]'); if (!el) return;
@@ -457,6 +481,7 @@
             map = m;
             FloodSim.init({ getPopulation: () => appState.apiData && appState.apiData.population });
             FloodRender.init(map);
+            FloodGrid.init(map);
             FloodSim.on('scenario', onScenario);
             FloodSim.on('time', onTime);
             FloodSim.on('frame', () => { if (!FloodSim.state.playing) onTime(FloodSim.snapshot()); });
@@ -474,6 +499,18 @@
             appState.rainfallAmount = mm;
             FloodSim.state.storm = mm;
             FloodSim.setVillage(appState.currentVillageId);
+        },
+        /** Frame the whole village / district, leaving room for the side panels. */
+        fitArea(id) {
+            const cfg = typeof SIMULATION_CONFIG !== 'undefined' && SIMULATION_CONFIG[id];
+            if (!map || !cfg) return false;
+            const [w, s, e, n] = cfg.bbox;
+            const narrow = window.innerWidth <= 900;
+            map.fitBounds([[w, s], [e, n]], {
+                padding: narrow ? { top: 110, bottom: 150, left: 20, right: 20 } : { top: 90, bottom: 120, left: 360, right: 345 },
+                pitch: 38, bearing: 0, duration: 1800, essential: true
+            });
+            return true;
         },
         onVillageChange(id) {
             closeSimInspector();

@@ -20,7 +20,7 @@
     const S = global.FloodScenarios;
     const HOUR = 3600;
     const EXPOSED_M = 0.3;       // people standing in water deeper than this are counted as exposed
-    const LIFE_RISK_M = 1.0;     // ... and at risk to life above this, or in fast water (d*v > 0.8)
+    const LIFE_RISK_M = 1.5;     // ... and at risk to life above this, or in fast water (d*v > 1)
     const WET_M = 0.15;          // area counted as inundated
 
     const listeners = {};
@@ -115,6 +115,32 @@
         });
     }
 
+    /** Residents per model cell inside the village boundary (density model from enhanced.js). */
+    function prepareCellPopulation() {
+        const t = state.terrain, N = t.nx * t.ny, sc = state.scenario;
+        if (!(state.cellPopBase && state.cellPopFor === state.villageId)) {
+            state.cellPopBase = densityPopulation(t);
+            state.cellPopFor = state.villageId;
+        }
+        // nobody lives in the permanent river channels
+        const pop = Float32Array.from(state.cellPopBase);
+        if (sc.initialDepth) for (let i = 0; i < N; i++) if (sc.initialDepth[i] > 0) pop[i] = 0;
+        state.cellPop = pop;
+    }
+
+    function densityPopulation(t) {
+        const N = t.nx * t.ny;
+        const pop = new Float32Array(N);
+        const dens = typeof global.estimateAmbientPopulationDensity === 'function' ? global.estimateAmbientPopulationDensity
+            : (typeof estimateAmbientPopulationDensity === 'function' ? estimateAmbientPopulationDensity : null);
+        for (let i = 0; i < N; i++) {
+            if (!t.mask[i]) continue;
+            const [lng, lat] = t.toLngLat(i);
+            pop[i] = (dens ? dens(lng, lat, state.villageId) : 300) * t.cellKm2;
+        }
+        return pop;
+    }
+
     function prepareFacilities() {
         const t = state.terrain;
         state.facilityCells = facilities
@@ -143,6 +169,7 @@
         state.runId = seq;
         state.derivedEvents = [];
         state.flags = {};
+        prepareCellPopulation();
         preparePopulation();
         prepareFacilities();
         rebuildEvents();
@@ -152,6 +179,7 @@
         const msg = {
             type: 'run', runId: seq, nx: terrain.nx, ny: terrain.ny, dx: terrain.dx, dy: terrain.dy, z: terrain.z,
             tStart: sc.tStart, tEnd: sc.tEnd, frameEvery: sc.frameEvery, seriesStep: sc.seriesStep,
+            z: sc.z || terrain.z, breaches: sc.breaches || [],
             rain: sc.rain, rainWeight: sc.rainWeight, rainConc: sc.rainConc, drainSeries: sc.drainSeries || null,
             infil: sc.infil, manning: sc.manning, infilMul: sc.infilMul, drainRate: sc.drainRate,
             inflows: sc.inflows.map(i => ({ cells: i.cells, series: i.series, conc: i.conc })),
@@ -170,6 +198,14 @@
             detectEvents(m.k);
             emit('frame', { k: m.k, t: m.t, computedUntil: computedUntil() });
             if (m.k === 0 || Math.abs(m.t - state.t) < 700) emit('time', snapshot());
+        } else if (m.type === 'event') {
+            const sc = state.scenario;
+            const tpl = sc.dynamicEvents && sc.dynamicEvents[m.id];
+            if (tpl) pushDerived({ ...tpl, t: m.t });
+            (sc.breachSites || []).forEach(b => { if (b.id === m.id) b.t = m.t; });
+            if (sc.breach && sc.breach.id === m.id) sc.breach.t = m.t;
+            rebuildEvents();
+            emit('breach', { id: m.id, t: m.t });
         } else if (m.type === 'done') {
             state.done = true;
             state.massBalance = m.massBalance;
@@ -188,16 +224,24 @@
     function deriveFrame(f) {
         const t = state.terrain;
         const d = f.depth;
-        let wet = 0;
-        for (let i = 0; i < d.length; i++) if (d[i] > WET_M * 1000) wet++;
-        let exposed = 0, lifeRisk = 0;
+        // area and people inside the village boundary
+        let wet = 0, exposed = 0, lifeRisk = 0, maxIn = 0;
+        const mask = t.mask, cp = state.cellPop;
+        for (let i = 0; i < d.length; i++) {
+            if (!mask[i]) continue;
+            const di = d[i];
+            if (di > WET_M * 1000) wet++;
+            if (di > maxIn) maxIn = di;
+            if (di < EXPOSED_M * 1000) continue;
+            exposed += cp[i];
+            const dm = di / 1000, sp = Math.hypot(f.u[i], f.v[i]) / 10;
+            if (dm > LIFE_RISK_M || dm * sp > 1) lifeRisk += cp[i];
+        }
+        // named settlements (population points from enhanced.js)
         const perCluster = {};
         for (const p of state.popPoints) {
             const dm = d[p.cell] / 1000;
             if (dm < EXPOSED_M) continue;
-            const sp = Math.hypot(f.u[p.cell], f.v[p.cell]) / 10;
-            exposed += p.pop;
-            if (dm > LIFE_RISK_M || dm * sp > 0.8) lifeRisk += p.pop;
             const c = perCluster[p.cluster] || (perCluster[p.cluster] = { people: 0, maxDepth: 0 });
             c.people += p.pop;
             c.maxDepth = Math.max(c.maxDepth, dm);
@@ -209,9 +253,10 @@
         const sc = state.scenario;
         let gauge = null;
         if (sc.gauge.kind === 'depth') gauge = d[sc.gauge.cell] / 1000;
+        else if (sc.gauge.kind === 'stage') gauge = (sc.z || t.z)[sc.gauge.cell] + d[sc.gauge.cell] / 1000;
         else gauge = S.seriesValueAt(sc.gauge.series, sc.tStart, f.t);
         return {
-            t: f.t, wetKm2: wet * t.cellKm2, maxDepth: f.stats.maxDepth, volume: f.stats.volume,
+            t: f.t, wetKm2: wet * t.cellKm2, maxDepth: maxIn / 1000, volume: f.stats.volume,
             exposed: Math.round(exposed), lifeRisk: Math.round(lifeRisk), perCluster, facilities: fac, gauge,
             watch: (sc.watchPoints || []).map(w => ({ depth: d[w.cell] / 1000, conc: f.conc[w.cell] / 255 }))
         };
@@ -290,13 +335,13 @@
         });
 
         // gauge crossings for depth gauges
-        if (sc.gauge.kind === 'depth' && prev) {
+        if ((sc.gauge.kind === 'depth' || sc.gauge.kind === 'stage') && prev && sc.gauge.thresholds.length) {
             sc.gauge.thresholds.forEach((th, i) => {
                 const key = 'gauge:' + i;
                 if (!fl[key] && cur.gauge >= th.v) {
                     fl[key] = true;
                     pushDerived({ t, level: th.level, kind: 'gauge', lngLat: state.terrain.toLngLat(sc.gauge.cell),
-                        title: `${sc.gauge.name}: above ${th.label.toLowerCase()} level`, detail: `${cur.gauge.toFixed(2)} m of water (${th.label} ${th.v} m).` });
+                        title: `${sc.gauge.name}: above ${th.label === 'HFL' ? 'highest flood level' : th.label.toLowerCase() + ' level'}`, detail: sc.gauge.kind === 'stage' ? `Stage ${cur.gauge.toFixed(2)} m (${th.label} ${th.v.toFixed(2)} m).` : `${cur.gauge.toFixed(2)} m of water (${th.label} ${th.v} m).` });
                 }
             });
         }
@@ -474,7 +519,7 @@
                 `Scenario: ${sc.flood_type} (synthetic storm, ${sc.stormMm} mm in 24 h)`,
                 `Model: local-inertial shallow-water solver on SRTM terrain, ${state.terrain.nx}x${state.terrain.ny} cells at ~${Math.round(state.terrain.dx)} m`,
                 peak ? `Peak inundation: ${peak.wetKm2.toFixed(1)} km² at T+${(peak.t / HOUR).toFixed(1)} h` : 'Peak inundation: run incomplete',
-                peak ? `People in water over 30 cm at peak: ${fmtInt(peak.exposed)} (sample estimate)` : '',
+                peak ? `People in water over 30 cm at peak: ${fmtInt(peak.exposed)} (density-model estimate)` : '',
                 '', 'Event log:'
             ];
             state.events.forEach(e => lines.push(`  T+${String(Math.floor(e.t / HOUR)).padStart(2, '0')}:${String(Math.floor(e.t % HOUR / 60)).padStart(2, '0')}  [${e.level.toUpperCase()}] ${e.title}`));

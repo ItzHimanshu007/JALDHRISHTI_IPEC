@@ -57,9 +57,10 @@
             z[i] = doc.z_min + zq[i] * doc.z_scale;
             acc[i] = Math.pow(2, accq[i] / 12);
         }
+        const mask = doc.mask_u8_b64 ? b64ToTyped(doc.mask_u8_b64, Uint8Array) : new Uint8Array(nx * ny).fill(1);
         const [w, s, e, n] = doc.bounds;
         const t = {
-            id: doc.village_id, nx, ny, dx: doc.dx_m, dy: doc.dy_m, bounds: doc.bounds, z, acc,
+            id: doc.village_id, nx, ny, dx: doc.dx_m, dy: doc.dy_m, bounds: doc.bounds, z, acc, mask,
             cellKm2: doc.dx_m * doc.dy_m / 1e6,
             toCell(lng, lat) {
                 const c = Math.floor((lng - w) / (e - w) * nx);
@@ -313,7 +314,7 @@
             flood_type: 'Flash flood · debris flow',
             summary: 'Orographic monsoon bursts on the Western Ghats. Slope stability (infinite-slope model) decides whether the valley head above Punchirimattam fails; debris is routed down the Punnapuzha through Mundakkai and Chooralmala.',
             startHour: 20,
-            tStart, rain, rainWeight, rainConc: 0.12,
+            tStart, z: t.z, rain, rainWeight, rainConc: 0.12,
             infil: { f0: 28 / 1000 / HOUR, fc: 7 / 1000 / HOUR, Fk: 0.045 },
             ...f, inflows: [], pulses, stage: null,
             gauge: {
@@ -330,183 +331,356 @@
     }
 
     // ------------------------------------------------------------------
-    // Darbhanga: embankment breach + drainage congestion
+    // River network helpers (plains)
+    // ------------------------------------------------------------------
+    /**
+     * Rivers entering the domain: edge cells that are local maxima of drainage
+     * area and whose largest inward neighbour carries more (i.e. flow runs in).
+     */
+    function findEntries(t, sides, minKm2, count, minSepCells) {
+        const cand = [];
+        const edge = [];
+        if (sides.includes('north')) for (let c = 1; c < t.nx - 1; c++) edge.push([1, c, 1, 0]);
+        if (sides.includes('south')) for (let c = 1; c < t.nx - 1; c++) edge.push([t.ny - 2, c, -1, 0]);
+        if (sides.includes('west')) for (let r = 1; r < t.ny - 1; r++) edge.push([r, 1, 0, 1]);
+        if (sides.includes('east')) for (let r = 1; r < t.ny - 1; r++) edge.push([r, t.nx - 2, 0, -1]);
+        for (const [r, c, dr, dc] of edge) {
+            const i = r * t.nx + c;
+            if (t.acc[i] * t.cellKm2 < minKm2) continue;
+            let inward = 0;
+            for (let k = -1; k <= 1; k++) {
+                const rr = r + dr + (dc ? k : 0), cc = c + dc + (dr ? k : 0);
+                if (rr >= 0 && rr < t.ny && cc >= 0 && cc < t.nx) inward = Math.max(inward, t.acc[rr * t.nx + cc]);
+            }
+            if (inward >= t.acc[i]) cand.push(i);       // >= : stored drainage areas are quantised
+        }
+        cand.sort((a, b) => t.acc[b] - t.acc[a]);
+        const out = [];
+        for (const i of cand) {
+            const r = Math.floor(i / t.nx), c = i % t.nx;
+            if (out.every(j => Math.hypot(Math.floor(j / t.nx) - r, (j % t.nx) - c) > minSepCells)) out.push(i);
+            if (out.length === count) break;
+        }
+        return out;
+    }
+
+    /** Follow drainage downstream (always to the neighbour with the most flow). */
+    function traceDownstream(t, start) {
+        const path = [start];
+        const seen = new Set(path);
+        let i = start;
+        for (let guard = 0; guard < 4000; guard++) {
+            const r = Math.floor(i / t.nx), c = i % t.nx;
+            // stored drainage areas are quantised, so accept ties and break them by elevation
+            let next = -1, best = t.acc[i] * 0.999, bestZ = Infinity;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                if (!dr && !dc) continue;
+                const rr = r + dr, cc = c + dc;
+                if (rr < 0 || rr >= t.ny || cc < 0 || cc >= t.nx) continue;
+                const j = rr * t.nx + cc;
+                if (seen.has(j) || t.acc[j] < best) continue;
+                if (t.acc[j] > best * 1.001 || t.z[j] < bestZ) { best = t.acc[j]; bestZ = t.z[j]; next = j; }
+            }
+            if (next < 0) break;
+            path.push(next); seen.add(next); i = next;
+            if (r === 0 || c === 0 || r === t.ny - 1 || c === t.nx - 1) break;
+        }
+        return path;
+    }
+
+    function distKm(a, b) {
+        return Math.hypot((a[0] - b[0]) * 111 * Math.cos(a[1] * Math.PI / 180), (a[1] - b[1]) * 111);
+    }
+
+    /** Named places from the dashboard's settlement list (enhanced.js), if loaded. */
+    function places(villageId) {
+        try {
+            if (typeof VILLAGE_POP_CONFIGS !== 'undefined' && VILLAGE_POP_CONFIGS[villageId]) {
+                return VILLAGE_POP_CONFIGS[villageId].clusters.filter(c => !/Scattered|Urban Core|Campus|Complex|Colony$/.test(c.name));
+            }
+        } catch (e) { /* not loaded */ }
+        return [];
+    }
+
+    function nearestPlace(villageId, lngLat) {
+        let best = null, bd = Infinity;
+        places(villageId).forEach(p => { const d = distKm(lngLat, [p.lng, p.lat]); if (d < bd) { bd = d; best = p; } });
+        return best ? { name: best.name, km: bd } : null;
+    }
+
+    function placeLabel(villageId, lngLat) {
+        const p = nearestPlace(villageId, lngLat);
+        return p ? (p.km < 3 ? p.name : `${Math.round(p.km)} km from ${p.name}`) : `${lngLat[1].toFixed(3)}°N ${lngLat[0].toFixed(3)}°E`;
+    }
+
+    // ------------------------------------------------------------------
+    // Darbhanga: embanked rivers, breach, drainage congestion
     // ------------------------------------------------------------------
     function buildDarbhanga(t, stormMm) {
-        const tStart = -1 * HOUR;
+        const vid = 'darbhanga';
+        const tStart = -6 * HOUR;               // spin-up so the rivers are flowing at T+0
+        const N = t.nx * t.ny;
+        const z = Float32Array.from(t.z);
         // Local rain is a fraction of the catchment storm (the flood wave is born upstream in Nepal).
-        const rain = hyetograph(tStart, stormMm * 0.6, 0.4, [
+        const rain = hyetograph(tStart, stormMm * 0.65, 0.4, [
             { t: 2, sd: 1.5, w: 1.0 }, { t: 7, sd: 2, w: 1.3 }, { t: 13, sd: 1.2, w: 0.7 }
         ]);
-        const catchRain = hyetograph(tStart, stormMm, 0.3, [{ t: 1.5, sd: 2, w: 1.4 }, { t: 6, sd: 2.5, w: 1.2 }]);
-        const N = t.nx * t.ny;
-        const noise = valueNoise(t.nx, t.ny, 30, 11);
+        const catchRain = hyetograph(tStart, stormMm, 0.3, [{ t: -1, sd: 2, w: 1.4 }, { t: 5, sd: 2.5, w: 1.2 }]);
+        const noise = valueNoise(t.nx, t.ny, 28, 11);
         const rainWeight = new Float32Array(N);
-        for (let i = 0; i < N; i++) rainWeight[i] = 0.85 + 0.3 * noise[i];
+        for (let i = 0; i < N; i++) rainWeight[i] = 0.8 + 0.4 * noise[i];
         const urban = [
-            { lng: 85.8995, lat: 26.1570, radiusKm: 1.6, drainMmH: 14 },
-            { lng: 85.8976, lat: 26.1188, radiusKm: 1.1, drainMmH: 12 }
+            { lng: 85.8995, lat: 26.1570, radiusKm: 2.0, drainMmH: 14 },
+            { lng: 85.8976, lat: 26.1188, radiusKm: 1.3, drainMmH: 12 }
         ];
-        const f = baseFields(t, { nLand: 0.05, nChannel: 0.035, channelKm2: 6, urban });
+        const f = baseFields(t, { nLand: 0.05, nChannel: 0.033, channelKm2: 400, urban });
 
-        // River (Kamla-Balan side, east of the city) stage above the country-side ground at the breach site.
-        const n = seriesLen(tStart);
-        const riverQ = riverResponse(catchRain, 9, 16, 300, 380);    // m3/s
-        const stageAboveGround = new Float32Array(n);
-        for (let k = 0; k < n; k++) stageAboveGround[k] = 0.15 * Math.pow(riverQ[k], 0.42) - 0.6;
-        const WL = 2.1, DL = 2.8, HFL = 3.9;
+        // Rivers from the Nepal side enter along the north and west edges.
+        const entries = findEntries(t, ['north', 'west'], 250, 4, 12);
+        const rivers = entries.map(e => ({ entry: e, path: traceDownstream(t, e), km2: t.acc[e] * t.cellKm2 }));
+        // Water moves through cell faces, so diagonal steps get a connecting
+        // cell (the lower of the two) or the embankments would dam the channel.
+        rivers.forEach(rv => {
+            const full = [];
+            rv.path.forEach((i, k) => {
+                if (k) {
+                    const a = rv.path[k - 1];
+                    const ra = Math.floor(a / t.nx), ca = a % t.nx, rb = Math.floor(i / t.nx), cb = i % t.nx;
+                    if (ra !== rb && ca !== cb) {
+                        const j1 = ra * t.nx + cb, j2 = rb * t.nx + ca;
+                        full.push(t.z[j1] <= t.z[j2] ? j1 : j2);
+                    }
+                }
+                full.push(i);
+            });
+            rv.path = full;
+        });
+        const onPath = new Uint8Array(N);
+        rivers.forEach(rv => rv.path.forEach(i => { onPath[i] = 1; }));
 
-        const breachLL = [85.9790, 26.1690];
-        const breachCell = t.toCell(breachLL[0], breachLL[1]);
-        const gGround = t.z[breachCell];
-        const events = [];
-        let tWL = null, tDL = null, tBreach = null, above = 0;
-        for (let k = 0; k < n; k++) {
-            const tt = seriesTime(tStart, k);
-            if (tt < 0) continue;
-            if (tWL === null && stageAboveGround[k] >= WL) tWL = tt;
-            if (tDL === null && stageAboveGround[k] >= DL) tDL = tt;
-            above = stageAboveGround[k] >= DL + 0.25 ? above + SERIES_STEP : 0;
-            if (tBreach === null && above >= 1.5 * HOUR) tBreach = tt;   // piping after sustained load
-        }
-        const ll = t.toLngLat(breachCell);
-        if (tWL !== null) events.push({ t: tWL, level: 'yellow', kind: 'gauge', lngLat: ll, title: 'River above Warning Level at Khutwara', detail: `Stage ${(gGround + WL).toFixed(2)} m. Embankment patrols to be alerted.` });
-        if (tDL !== null) events.push({ t: tDL, level: 'orange', kind: 'gauge', lngLat: ll, title: 'River above Danger Level at Khutwara', detail: `Stage ${(gGround + DL).toFixed(2)} m. City sluice gates closed; outfalls blocked.` });
-
-        const drainSeries = new Float32Array(n);
-        for (let k = 0; k < n; k++) drainSeries[k] = stageAboveGround[k] >= DL ? 0.15 : 1;
-
-        const inflows = [];
-        if (tBreach !== null && tBreach < SIM_END - HOUR) {
-            const series = new Float32Array(n);
-            for (let k = 0; k < n; k++) {
-                const tt = seriesTime(tStart, k);
-                if (tt < tBreach) continue;
-                const width = Math.min(160, 20 + (tt - tBreach) / HOUR * 45);     // breach widens over ~3 h
-                const head = Math.max(0, stageAboveGround[k] - 0.3);
-                series[k] = 1.7 * width * Math.pow(head, 1.5) * 0.55;             // broad-crested weir, partial drowning
+        // Carve a channel and build embankments on both banks of every river.
+        const bank = new Float32Array(N);
+        const levee = new Uint8Array(N);
+        const LEVEE_H = 4.5, CARVE = 2.0;
+        rivers.forEach(rv => rv.path.forEach(i => {
+            const r = Math.floor(i / t.nx), c = i % t.nx;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                const rr = r + dr, cc = c + dc;
+                if (rr < 0 || rr >= t.ny || cc < 0 || cc >= t.nx) continue;
+                const j = rr * t.nx + cc;
+                if (!onPath[j]) { levee[j] = 1; bank[j] = t.z[j]; }
             }
-            inflows.push({ name: 'Breach', cells: neighbours(t, breachCell, 1), series, conc: 0.65 });
-            events.push({ t: tBreach, level: 'red', kind: 'breach', lngLat: ll, title: 'Embankment breach at Khutwara',
-                detail: 'West embankment failed after sustained load above Danger Level. Breach ~20 m wide and widening.' });
-            events.push({ t: tBreach + 3 * HOUR, level: 'red', kind: 'breach', lngLat: ll, title: 'Breach widened to ~150 m', detail: `Outflow ~${Math.round(Math.max(...series))} m³/s into the countryside.` });
-        } else {
-            events.push({ t: 12 * HOUR, level: 'info', kind: 'note', lngLat: ll, title: 'Embankments holding', detail: 'River stays below the sustained-overload threshold at this rainfall.' });
+        }));
+        for (let i = 0; i < N; i++) {
+            if (onPath[i]) { z[i] = t.z[i] - CARVE; f.manning[i] = 0.03; f.infilMul[i] = 0.2; }
+            else if (levee[i]) z[i] = t.z[i] + LEVEE_H;
         }
 
-        const stageAbs = new Float32Array(n);
-        for (let k = 0; k < n; k++) stageAbs[k] = gGround + stageAboveGround[k];
+        const n = seriesLen(tStart);
+        const inflows = rivers.map((rv, k) => {
+            const areaKm2 = rv.km2 * 6;                         // the catchment continues far into Nepal
+            const base = 40 + areaKm2 * 0.012;
+            const series = riverResponse(catchRain, 5 + k * 0.5, 14, areaKm2 * 0.07, base);
+            return { name: `River ${k + 1}`, cells: [rv.entry], series, conc: 0.6, areaKm2 };
+        });
+
+        // Breach sites: on the river passing closest to Darbhanga town, the reach
+        // nearest the town (town-side bank); on every other river crossing the
+        // district, the weakest (lowest) bank in the middle of its reach.
+        const town = [85.8995, 26.1570];
+        const sites = [];
+        rivers.forEach((rv, k) => {
+            const inside = rv.path.filter((i, pos) => t.mask[i] && pos > 4 && pos < rv.path.length - 4);
+            if (inside.length < 15) return;
+            let near = null;
+            inside.forEach(i => { const d = distKm(t.toLngLat(i), town); if (d > 3 && (!near || d < near.d)) near = { d, i }; });
+            sites.push({ k, i: near.i, dTown: near.d, inside });
+        });
+        sites.sort((a, b) => a.dTown - b.dTown);
+        sites.forEach((st, n) => {
+            if (n === 0) return;                                             // town site already chosen
+            const mid = st.inside.slice(Math.floor(st.inside.length * 0.3), Math.ceil(st.inside.length * 0.7));
+            st.i = mid.reduce((a, j) => t.z[j] < t.z[a] ? j : a, mid[0]);
+        });
+        const breaches = [], events = [];
+        events.dynamic = {};
+        let gauge = null, breachInfo = null;
+        const breachSites = [];
+        sites.forEach((st, n) => {
+            const w = st.i, wr = Math.floor(w / t.nx), wc = w % t.nx;
+            const tl = t.toLngLat(w);
+            const target = n === 0 ? town : null;
+            const cells = [], lowerTo = [];
+            // town-side bank for the town site; for the others the lower bank
+            let side = null;
+            if (!target) {
+                let sa = 0, sb = 0;
+                for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+                    const j = (wr + dr) * t.nx + (wc + dc);
+                    if (!levee[j]) continue;
+                    if (dr + dc >= 0) sa += t.z[j]; else sb += t.z[j];
+                }
+                side = sa <= sb ? 1 : -1;
+            }
+            for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+                const j = (wr + dr) * t.nx + (wc + dc);
+                if (!levee[j]) continue;
+                if (target && dc * (town[0] - tl[0]) + dr * (tl[1] - town[1]) < 0) continue;
+                if (side && (dr + dc) * side < 0) continue;
+                cells.push(j); lowerTo.push(t.z[j] - 0.3);
+            }
+            if (!cells.length) return;
+            let bk = 0; cells.forEach(j => { bk += bank[j]; }); bk /= cells.length;
+            const WL = bk + 0.6, DL = bk + 1.3, HFL = bk + 2.4;
+            const label = placeLabel(vid, tl);
+            const id = 'breach' + n;
+            breaches.push({ id, watch: w, cells, lowerTo, trigger: DL + 0.2, sustain: HOUR });
+            breachSites.push({ id, cell: w, lngLat: tl, t: null, label });
+            events.dynamic[id] = { level: 'red', kind: 'breach', lngLat: tl, title: `Embankment breach near ${label}`,
+                detail: n === 0 ? 'Town-side embankment failed after an hour above Danger Level. Floodwater heading for Darbhanga town.'
+                    : 'Embankment failed after an hour above Danger Level. Floodwater spreading over the countryside.' };
+            if (n === 0) {
+                breachInfo = breachSites[0];
+                gauge = {
+                    name: `River stage near ${label.replace(/^\d+ km from /, '')}`, kind: 'stage', cell: w, unit: 'm stage',
+                    thresholds: [{ v: WL, label: 'Warning', level: 'yellow' }, { v: DL, label: 'Danger', level: 'orange' }, { v: HFL, label: 'HFL', level: 'red' }]
+                };
+            }
+        });
+        const watchPoints = breachSites.map(b => ({ name: b.label, cell: b.cell, lngLat: b.lngLat }));
+
+        const initialDepth = new Float32Array(N);
+        for (let i = 0; i < N; i++) if (onPath[i]) initialDepth[i] = 2.0;
+
+        const drainSeries = new Float32Array(n).fill(1);
+        for (let k = 0; k < n; k++) if (seriesTime(tStart, k) > 6 * HOUR) drainSeries[k] = 0.2;   // sluices shut as rivers rise
+        events.push({ t: 6 * HOUR, level: 'yellow', kind: 'note', lngLat: town, title: 'Sluice gates closed at town outfalls', detail: 'Rivers above outfall level: local rain can no longer drain out of the embanked basins.' });
 
         return {
             flood_type: 'Embankment breach · drainage congestion',
-            summary: 'Rain on the upstream catchment raises the Kamla-Balan. Sustained load above Danger Level breaches the west embankment at Khutwara; water spreads west across the flat plain while closed sluices stop the city from draining local rain.',
+            summary: 'Rain over the Nepal catchment sends flood waves down the embanked rivers of the district. Sustained load above Danger Level breaches the embankment nearest Darbhanga town, while rain trapped between embankments ponds across the plain.',
             startHour: 6,
-            tStart, rain, rainWeight, rainConc: 0.1, drainSeries,
-            infil: { f0: 10 / 1000 / HOUR, fc: 2 / 1000 / HOUR, Fk: 0.025 },
-            ...f, inflows, pulses: [], stage: null,
-            closedSides: ['north', 'east'],       // the river embankment runs along the east edge
-            gauge: {
-                name: 'Kamla-Balan at Khutwara', kind: 'series', unit: 'm stage', series: stageAbs,
-                thresholds: [{ v: gGround + WL, label: 'Warning', level: 'yellow' }, { v: gGround + DL, label: 'Danger', level: 'orange' }, { v: gGround + HFL, label: 'HFL', level: 'red' }]
-            },
-            watchPoints: [{ name: 'Breach site', cell: breachCell, lngLat: ll }],
-            breach: { cell: breachCell, lngLat: ll, t: tBreach },
-            events
+            tStart, z, rain, rainWeight, rainConc: 0.1, drainSeries,
+            infil: { f0: 14 / 1000 / HOUR, fc: 3 / 1000 / HOUR, Fk: 0.03 },
+            ...f, inflows, pulses: [], stage: null, breaches, initialDepth, initialConc: 0.5,
+            gauge: gauge || { name: 'River', kind: 'depth', cell: entries[0], unit: 'm depth', thresholds: [] },
+            watchPoints, breach: breachInfo, breachSites, rivers: rivers.map(rv => rv.path), events
         };
     }
 
     // ------------------------------------------------------------------
-    // Dhemaji: flash tributaries + Brahmaputra backwater sheet flooding
+    // Dhemaji: Brahmaputra + flashy north-bank tributaries
     // ------------------------------------------------------------------
     function buildDhemaji(t, stormMm) {
-        const tStart = -3 * HOUR;           // spin-up so the rivers are flowing at T+0
+        const vid = 'dhemaji';
+        const tStart = -8 * HOUR;
+        const N = t.nx * t.ny;
         const rain = hyetograph(tStart, stormMm, 0.3, [
             { t: 1.5, sd: 1, w: 1.0 }, { t: 6, sd: 1.4, w: 1.5 }, { t: 11.5, sd: 1.2, w: 1.0 }, { t: 17.5, sd: 1, w: 0.5 }
         ]);
-        const N = t.nx * t.ny;
-        const noise = valueNoise(t.nx, t.ny, 26, 23);
+        let zlo = Infinity, zhi = -Infinity;
+        for (let i = 0; i < N; i++) { zlo = Math.min(zlo, t.z[i]); zhi = Math.max(zhi, t.z[i]); }
+        const noise = valueNoise(t.nx, t.ny, 30, 23);
         const rainWeight = new Float32Array(N);
-        for (let r = 0; r < t.ny; r++) {
-            for (let c = 0; c < t.nx; c++) {
-                const i = r * t.nx + c;
-                rainWeight[i] = (0.7 + 0.7 * (1 - r / t.ny)) * (0.85 + 0.3 * noise[i]);   // heavier toward the foothills
-            }
+        for (let i = 0; i < N; i++) {
+            const oro = 0.8 + 0.9 * Math.min(1, (t.z[i] - zlo) / 400);      // foothills catch more
+            rainWeight[i] = oro * (0.85 + 0.3 * noise[i]);
         }
-        const f = baseFields(t, { nLand: 0.045, nChannel: 0.03, channelKm2: 8,
-            urban: [{ lng: 94.5630, lat: 27.4764, radiusKm: 0.8, drainMmH: 8 }] });
+        const f = baseFields(t, { nLand: 0.045, nChannel: 0.03, channelKm2: 300,
+            urban: [{ lng: 94.5630, lat: 27.4764, radiusKm: 1.0, drainMmH: 8 }, { lng: 94.7256, lat: 27.5894, radiusKm: 1.0, drainMmH: 8 }] });
 
-        // Tributaries entering along the northern edge: local maxima of drainage area.
-        const cand = [];
-        for (let c = 2; c < t.nx - 2; c++) {
-            const i = 1 * t.nx + c;
-            if (t.acc[i] * t.cellKm2 < 3) continue;
-            if (t.acc[i] >= t.acc[i - 1] && t.acc[i] >= t.acc[i + 1]) cand.push(i);
-        }
-        cand.sort((a, b) => t.acc[b] - t.acc[a]);
-        const entries = [];
-        for (const i of cand) {
-            if (entries.every(j => Math.abs((j % t.nx) - (i % t.nx)) > 18)) entries.push(i);
-            if (entries.length === 3) break;
-        }
         const n = seriesLen(tStart);
-        const names = ['Jiadhal', 'Kumotiya', 'Gainadi'];
-        const inflows = entries.map((i, k) => {
-            const areaKm2 = t.acc[i] * t.cellKm2 * 3.5;          // catchment continues into the Arunachal hills
-            const series = riverResponse(rain, 1.6 + k * 0.4, 5, 0.15 * areaKm2, 4 + areaKm2 * 0.05);
-            return { name: names[k] || `Tributary ${k + 1}`, cells: neighbours(t, i + 2 * t.nx, 1), series, conc: 0.75, areaKm2 };
-        });
-
-        // Southern boundary held up by the Brahmaputra (backwater).
-        let zSouth = Infinity;
-        const southCells = [];
-        for (let c = 0; c < t.nx; c++) { const i = (t.ny - 1) * t.nx + c; southCells.push(i); zSouth = Math.min(zSouth, t.z[i]); }
-        const rise = 0.8 + Math.min(2.7, stormMm / 300 * 2.7);
-        const stageSeries = new Float32Array(n);
-        for (let k = 0; k < n; k++) {
-            const th = seriesTime(tStart, k) / HOUR;
-            stageSeries[k] = zSouth - 0.4 + rise * smoothstep(2, 20, th);
-        }
-        const DL = zSouth + 0.6, HFL = zSouth + 1.5;
+        // Brahmaputra: the largest river entering on the east edge, spread across its low belt.
+        const eastEntry = findEntries(t, ['east'], 500, 1, 5)[0];
+        const inflows = [];
         const events = [];
-        for (const inf of inflows) {
+        if (eastEntry !== undefined) {
+            const r0 = Math.floor(eastEntry / t.nx), c0 = eastEntry % t.nx;
+            const belt = [];
+            for (let dr = -3; dr <= 3; dr++) {
+                const r = r0 + dr;
+                if (r < 1 || r >= t.ny - 1) continue;
+                const j = r * t.nx + c0;
+                if (t.z[j] <= t.z[eastEntry] + 2) belt.push(j);
+            }
+            const q = new Float32Array(n);
+            for (let k = 0; k < n; k++) {
+                const th = seriesTime(tStart, k) / HOUR;
+                q[k] = 14000 + stormMm * 55 * smoothstep(-4, 16, th);
+            }
+            inflows.push({ name: 'Brahmaputra', cells: belt.length ? belt : [eastEntry], series: q, conc: 0.55, areaKm2: 0 });
+        }
+        // Tributaries off the Arunachal foothills along the north edge.
+        const trib = findEntries(t, ['north'], 60, 6, 15);
+        const town = [94.5630, 27.4764];
+        let jiadhal = null;
+        trib.forEach(i => {
+            const path = traceDownstream(t, i);
+            let dmin = Infinity;
+            path.forEach(j => { dmin = Math.min(dmin, distKm(t.toLngLat(j), town)); });
+            if (!jiadhal || dmin < jiadhal.d) jiadhal = { i, d: dmin, path };
+        });
+        // Inject each tributary where it leaves the hills (a 400 m grid cannot
+        // resolve the gorges above that, and water would pile up in them).
+        const plainZ = zlo + 45;
+        const outlets = trib.map(i => {
+            const path = traceDownstream(t, i);
+            return path.find(j => t.z[j] <= plainZ) || path[path.length - 1];
+        });
+        trib.forEach((i0, k) => {
+            const i = outlets[k];
+            const areaKm2 = t.acc[i0] * t.cellKm2 * 2.5;
+            const series = riverResponse(rain, 1.8 + (k % 3) * 0.4, 6, 0.16 * areaKm2, 3 + areaKm2 * 0.04);
+            const near = nearestPlace(vid, t.toLngLat(i));
+            let name = jiadhal && jiadhal.i === i0 ? 'Jiadhal' : (near && near.km < 12 ? `River near ${near.name}` : `North-bank river ${k + 1}`);
+            if (inflows.some(x => x.name === name)) name = `North-bank river ${k + 1}`;
+            inflows.push({ name, cells: neighbours(t, i, 0).length ? [i] : [i0], series, conc: 0.75, areaKm2 });
+        });
+        inflows.forEach(inf => {
+            if (inf.name === 'Brahmaputra') return;
             let kPk = 0;
             for (let k = 0; k < n; k++) if (inf.series[k] > inf.series[kPk]) kPk = k;
-            events.push({ t: Math.max(0, seriesTime(tStart, kPk) - 40 * 60), level: 'orange', kind: 'surge', lngLat: t.toLngLat(inf.cells[0]),
-                title: `Flash surge on the ${inf.name}`, detail: `Peak ~${Math.round(inf.series[kPk])} m³/s from the foothills, sand and silt laden.` });
+            if (inf.series[kPk] < 60) return;
+            events.push({ t: Math.max(0, seriesTime(tStart, kPk) - 60 * 60), level: 'orange', kind: 'surge', lngLat: t.toLngLat(inf.cells[0]),
+                title: `Flash surge on the ${inf.name}`, detail: `Peak ~${Math.round(inf.series[kPk])} m³/s leaving the foothills, sand and silt laden.` });
+        });
+        const bq = inflows.find(i => i.name === 'Brahmaputra');
+        if (bq) {
+            events.push({ t: 10 * HOUR, level: 'orange', kind: 'gauge', lngLat: t.toLngLat(bq.cells[0]), title: 'Brahmaputra rising above Danger Level',
+                detail: `Inflow ~${fmtK(FloodScenariosValue(bq.series, tStart, 10 * HOUR))} m³/s. Tributary outfalls drowned: backwater into the north-bank plain.` });
         }
-        let tDL = null, tHFL = null;
-        for (let k = 0; k < n; k++) {
-            const tt = seriesTime(tStart, k);
-            if (tt < 0) continue;
-            if (tDL === null && stageSeries[k] >= DL) tDL = tt;
-            if (tHFL === null && stageSeries[k] >= HFL) tHFL = tt;
-        }
-        const southLL = t.toLngLat(southCells[Math.floor(t.nx / 2)]);
-        if (tDL !== null) events.push({ t: tDL, level: 'orange', kind: 'gauge', lngLat: southLL, title: 'Brahmaputra backwater above Danger Level', detail: 'Tributary outfalls drowned; floodwater can no longer drain south.' });
-        if (tHFL !== null) events.push({ t: tHFL, level: 'red', kind: 'gauge', lngLat: southLL, title: 'Backwater above highest flood level', detail: 'Sheet flooding spreading north into the Dhemaji plain.' });
 
-        // Channels already flowing at the start of spin-up.
+        // Gauge: the Jiadhal where it passes Dhemaji town.
+        // gauge: the main channel of the Jiadhal within 8 km of Dhemaji town
+        const nearTown = jiadhal ? jiadhal.path.filter(j => t.mask[j] && distKm(t.toLngLat(j), town) < 8) : [];
+        let gcell = nearTown.length ? nearTown.reduce((a, j) => t.acc[j] > t.acc[a] ? j : a, nearTown[0])
+            : (jiadhal ? jiadhal.path[Math.floor(jiadhal.path.length / 2)] : trib[0]);
         const initialDepth = new Float32Array(N);
         for (let i = 0; i < N; i++) {
             const km2 = t.acc[i] * t.cellKm2;
-            if (km2 > 10) initialDepth[i] = Math.min(1.2, 0.25 * Math.log10(km2));
+            if (km2 > 200) initialDepth[i] = Math.min(4, 0.6 * Math.log10(km2));
         }
-
         return {
-            flood_type: 'Flash tributaries · backwater sheet flood',
-            summary: 'Rain on the Arunachal foothills sends silt-laden flash surges down the north-bank tributaries while the rising Brahmaputra holds the southern boundary up, so floodwater spreads as wide, shallow sheets across the plain.',
+            flood_type: 'Flash tributaries · Brahmaputra backwater',
+            summary: 'Rain on the Arunachal foothills sends silt-laden flash surges down the north-bank rivers (Jiadhal and its neighbours) while a rising Brahmaputra drowns their outfalls, so water spreads as wide, shallow sheets across the district.',
             startHour: 4,
-            tStart, rain, rainWeight, rainConc: 0.1,
+            tStart, z: t.z, rain, rainWeight, rainConc: 0.1,
             infil: { f0: 30 / 1000 / HOUR, fc: 8 / 1000 / HOUR, Fk: 0.05 },
-            ...f, inflows, pulses: [], initialDepth, initialConc: 0.5,
-            stage: { cells: southCells, series: stageSeries, conc: 0.55 },
+            ...f, inflows, pulses: [], initialDepth, initialConc: 0.5, stage: null,
             gauge: {
-                name: 'Brahmaputra backwater (south edge)', kind: 'series', unit: 'm stage', series: stageSeries,
-                thresholds: [{ v: DL, label: 'Danger', level: 'orange' }, { v: HFL, label: 'HFL', level: 'red' }]
+                name: nearTown.length ? 'Jiadhal at Dhemaji' : 'Jiadhal, mid reach', kind: 'depth', cell: gcell, unit: 'm depth',
+                thresholds: [{ v: 1.5, label: 'Warning', level: 'yellow' }, { v: 2.5, label: 'Danger', level: 'orange' }]
             },
-            watchPoints: inflows.map(inf => ({ name: inf.name, cell: inf.cells[0], lngLat: t.toLngLat(inf.cells[0]) })),
+            watchPoints: [],
             events
         };
+    }
+
+    function fmtK(v) { return Math.round(v).toLocaleString('en-IN'); }
+    function FloodScenariosValue(series, tStart, t) {
+        const x = (t - tStart) / SERIES_STEP;
+        const i = Math.max(0, Math.min(series.length - 1, Math.round(x)));
+        return series[i];
     }
 
     const BUILDERS = { wayanad_meppadi: buildMeppadi, darbhanga: buildDarbhanga, dhemaji: buildDhemaji };
@@ -519,8 +693,9 @@
         sc.stormMm = stormMm;
         sc.seriesStep = SERIES_STEP;
         sc.tEnd = SIM_END;
-        sc.frameEvery = 600;
-        sc.events.sort((a, b) => a.t - b.t);
+        sc.frameEvery = terrain.nx * terrain.ny > 45000 ? 900 : 600;
+        sc.dynamicEvents = sc.events.dynamic || {};
+        sc.events = sc.events.slice().sort((a, b) => a.t - b.t);
         sc.cumRain = cumulative(sc.rain, sc.tStart);
         sc.clock = (tSec) => fmtClock(sc.startHour, tSec);
         return sc;

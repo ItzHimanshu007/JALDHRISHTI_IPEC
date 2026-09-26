@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.0">
+    <link rel="stylesheet" href="css/ops.css?v=1.1">
 </head>
 
 <body>
@@ -137,10 +137,13 @@
                     <button class="layer-row active" id="layerSlope" type="button" data-layer="slope">
                         <span class="switch"></span><span class="layer-row__name">Unstable slopes (FS &lt; 1)</span>
                     </button>
-                    <button id="btnLayerRisk" class="layer-row layer-btn" type="button"
-                        onclick="setupLayerToggle('btnLayerRisk', 'flood-risk-layer')">
-                        <span class="switch"></span><span class="layer-row__name">Risk index grid</span>
+                    <button class="layer-row active" id="layerGrid" type="button" data-layer="grid">
+                        <span class="switch"></span><span class="layer-row__name">Risk grid (hexagons)</span>
                     </button>
+                    <div class="grid-legend" id="gridLegend">
+                        <span><i style="background:#5aa9d6"></i>Low</span><span><i style="background:#d8b638"></i>Moderate</span>
+                        <span><i style="background:#e0832f"></i>High</span><span><i style="background:#d44b45"></i>Severe</span>
+                    </div>
                     <button id="btnLayerPopHeatmap" class="layer-row layer-btn" type="button" onclick="togglePopulationHeatmap()">
                         <span class="switch"></span><span class="layer-row__name">Population density</span>
                     </button>
@@ -155,7 +158,7 @@
             <!-- Clicked-cell readout from the simulation -->
             <section class="panel" id="simInspector" hidden>
                 <div class="panel__head">
-                    <h2>Point readout</h2>
+                    <h2 id="simInspectorTitle">Point readout</h2>
                     <button class="icon-btn" type="button" id="simInspectorClose" aria-label="Close">&times;</button>
                 </div>
                 <div id="simInspectorBody"></div>
@@ -192,11 +195,13 @@
             <section class="panel" id="opsExposurePanel">
                 <div class="panel__head">
                     <div class="seg seg--tabs" id="opsExposureTabs">
-                        <button type="button" data-tab="settlements" class="active">Settlements</button>
+                        <button type="button" data-tab="grid" class="active">Grid cells</button>
+                        <button type="button" data-tab="settlements">Settlements</button>
                         <button type="button" data-tab="facilities">Facilities</button>
                     </div>
                 </div>
-                <div id="opsSettlements" class="exposure-list"></div>
+                <div id="opsGridList" class="exposure-list"></div>
+                <div id="opsSettlements" class="exposure-list" hidden></div>
                 <div id="opsFacilities" class="exposure-list" hidden></div>
             </section>
         </aside>
@@ -242,12 +247,13 @@
     <script src="js/voice-settings.js?v=1.0"></script>
     <script src="js/reports-store.js?v=1.0"></script>
     <script src="js/voice-service.js?v=1.0"></script>
-    <script src="js/flood-scenarios.js?v=1.0"></script>
-    <script src="js/flood-sim-solver.js?v=1.0"></script>
-    <script src="js/flood-sim.js?v=1.0"></script>
-    <script src="js/flood-render.js?v=1.0"></script>
-    <script src="js/enhanced.js?v=4.0"></script>
-    <script src="js/ops-ui.js?v=1.0"></script>
+    <script src="js/flood-scenarios.js?v=1.1"></script>
+    <script src="js/flood-sim-solver.js?v=1.1"></script>
+    <script src="js/flood-sim.js?v=1.1"></script>
+    <script src="js/flood-render.js?v=1.1"></script>
+    <script src="js/flood-grid.js?v=1.0"></script>
+    <script src="js/enhanced.js?v=4.1"></script>
+    <script src="js/ops-ui.js?v=1.1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');

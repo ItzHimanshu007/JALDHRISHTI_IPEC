@@ -53,7 +53,8 @@ function floodSolverProgram(self) {
         activeRun = runId;
 
         const nx = p.nx, ny = p.ny, dx = p.dx, dy = p.dy, N = nx * ny;
-        const z = p.z, man = p.manning, rainW = p.rainWeight;
+        const z = Float32Array.from(p.z);      // own copy: breaches lower embankment cells
+        const man = p.manning, rainW = p.rainWeight;
         const h = new Float64Array(N);
         const m = new Float64Array(N);          // tracer mass (conc x depth)
         const F = new Float64Array(N);          // cumulative infiltration (m)
@@ -85,6 +86,9 @@ function floodSolverProgram(self) {
         }
 
         const pulses = (p.pulses || []).map(pl => ({ ...pl, done: 0 }));
+        // Embankment breaches: when the water surface at `watch` stays above
+        // `trigger` for `sustain` seconds, the embankment cells drop to `lowerTo`.
+        const breaches = (p.breaches || []).map(b => ({ ...b, above: 0, done: false }));
         const tEnd = p.tEnd, frameEvery = p.frameEvery;
         let t = p.tStart;
         let nextFrame = 0;
@@ -273,6 +277,19 @@ function floodSolverProgram(self) {
             }
         }
 
+        function checkBreaches(dt) {
+            for (const b of breaches) {
+                if (b.done) continue;
+                const eta = z[b.watch] + h[b.watch];
+                b.above = eta >= b.trigger ? b.above + dt : 0;
+                if (b.above >= b.sustain && t >= 0) {
+                    b.done = true;
+                    b.cells.forEach((i, k) => { z[i] = b.lowerTo[k]; });
+                    self.postMessage({ type: 'event', runId, id: b.id, t, stage: eta });
+                }
+            }
+        }
+
         function stableDt() {
             let hmax = 0.05;
             for (let i = 0; i < N; i++) if (h[i] > hmax) hmax = h[i];
@@ -289,6 +306,7 @@ function floodSolverProgram(self) {
                 if (t + dt > tEnd) dt = tEnd - t;
                 if (dt <= 0) dt = 1e-3;
                 step(dt);
+                checkBreaches(dt);
                 t += dt;
                 steps++;
             }
