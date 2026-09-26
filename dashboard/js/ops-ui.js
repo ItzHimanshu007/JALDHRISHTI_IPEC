@@ -3,7 +3,7 @@
  * ---------------------------------------------------------------------------
  * Binds the flood simulation (flood-sim.js / flood-render.js) to the
  * dashboard: top-bar clock and alert level, situation KPIs, gauge chart,
- * scenario player (timeline, speed, storm total), layer switches, event
+ * scenario player (timeline, speed, water accumulated), layer switches, event
  * log, settlement / facility exposure and the click-to-inspect readout.
  */
 (function (global) {
@@ -29,7 +29,6 @@
     let lastListKey = '';
     let inspectLngLat = null;
     let inspectMarker = null;
-    let stormTimer = null;
 
     const fmtInt = (n) => Math.round(n).toLocaleString('en-IN');
     function fmtT(t) {
@@ -276,6 +275,57 @@
         ctx.fillStyle = '#fff'; ctx.fillRect(X(s.t) - 1, 0, 2, h);
     }
 
+    // ------------------------------------------------------------ water accumulated
+    /** Floodwater volume at the clock time, interpolated between frames like the map. */
+    function floodVolAt(t) {
+        const b = FloodSim.frameBracket(t);
+        const der = FloodSim.state.derived;
+        const d0 = b && der[b.f0.k], d1 = b && der[b.f1.k];
+        if (!d0) return null;
+        return d1 ? d0.floodVol * (1 - b.a) + d1.floodVol * b.a : d0.floodVol;
+    }
+
+    function fmtVolume(m3) {
+        if (m3 >= 1e5) return `${(m3 / 1e6).toFixed(2)}<small> million m³</small>`;
+        return `${fmtInt(m3)}<small> m³</small>`;
+    }
+
+    function renderAccum(s) {
+        const sc = s.scenario;
+        const v = floodVolAt(s.t) || 0;
+        const vAgo = s.t >= HOUR ? floodVolAt(s.t - HOUR) : 0;
+        $('accumValue').innerHTML = fmtVolume(v);
+        // 1 crore litres = 10,000 m³
+        const crore = v / 1e4;
+        $('accumAlt').textContent = v > 0 ? `${crore >= 100 ? fmtInt(crore) : crore.toFixed(1)} crore litres` : '';
+        const dl = $('accumDelta');
+        if (vAgo !== null && s.t > 0) {
+            const dv = v - vAgo;
+            dl.textContent = `${dv >= 0 ? '+' : '−'}${Math.abs(dv) >= 1e5 ? (Math.abs(dv) / 1e6).toFixed(2) + ' M' : fmtInt(Math.abs(dv))} m³ in 1 h`;
+            dl.classList.toggle('up', dv > 0);
+        } else { dl.textContent = `${Math.round(s.rainSoFar)} mm rain so far`; dl.classList.remove('up'); }
+
+        // sparkline: volume over the 24 h run, solid up to the clock time
+        const cv = $('accumSpark');
+        if (!cv.clientWidth) return;
+        const { ctx, w, h } = setupCanvas(cv);
+        const der = FloodSim.state.derived.filter(Boolean);
+        if (!der.length) return;
+        let vmax = 1;
+        der.forEach(d => { vmax = Math.max(vmax, d.floodVol); });
+        const X = (t) => t / sc.tEnd * w, Y = (x) => h - 1 - x / vmax * (h - 3);
+        const path = (pts) => { ctx.beginPath(); ctx.moveTo(X(pts[0].t), h); pts.forEach(d => ctx.lineTo(X(d.t), Y(d.floodVol))); ctx.lineTo(X(pts[pts.length - 1].t), h); ctx.closePath(); };
+        path(der);
+        ctx.fillStyle = 'rgba(90,169,214,0.16)'; ctx.fill();
+        const past = der.filter(d => d.t <= s.t);
+        if (past.length) {
+            past.push({ t: s.t, floodVol: v });
+            path(past);
+            ctx.fillStyle = 'rgba(90,169,214,0.55)'; ctx.fill();
+        }
+        ctx.fillStyle = '#fff'; ctx.fillRect(X(s.t) - 0.5, 0, 1, h);
+    }
+
     // ------------------------------------------------------------ events
     function renderEvents(s) {
         const evs = FloodSim.state.events;
@@ -447,6 +497,7 @@
         renderClock(s);
         if (!s.scenario) return;
         renderKpis(s);
+        renderAccum(s);
         renderGauge(s);
         renderTimeline(s);
         renderEvents(s);
@@ -496,21 +547,6 @@
         tl.addEventListener('pointerdown', (e) => { stopTour(); dragging = true; tl.setPointerCapture(e.pointerId); seekAt(e); });
         tl.addEventListener('pointermove', (e) => { if (dragging) seekAt(e); });
         tl.addEventListener('pointerup', () => { dragging = false; });
-
-        const slider = $('rainfallSlider');
-        const setStorm = (mm, immediate) => {
-            slider.value = mm;
-            $('rainfallValue').textContent = `${mm} mm`;
-            [...$('stormPresets').children].forEach(b => b.classList.toggle('active', Number(b.dataset.mm) === Number(mm)));
-            clearTimeout(stormTimer);
-            stormTimer = setTimeout(() => {
-                appState.rainfallAmount = Number(mm);
-                FloodSim.setStorm(Number(mm));
-                if ($('btnLayerRisk')?.classList.contains('active')) updateMapVision(appState.data.villages[appState.currentVillageId]);
-            }, immediate ? 0 : 350);
-        };
-        slider.addEventListener('input', () => setStorm(Number(slider.value)));
-        $('stormPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setStorm(Number(b.dataset.mm), true); });
 
         $('layerTerrain').addEventListener('click', () => {
             terrainOn = !terrainOn;
@@ -619,9 +655,8 @@
             let loaded = false;
             map.once('load', () => { loaded = true; });
             const nudge = setInterval(() => { if (loaded) clearInterval(nudge); else map.triggerRepaint(); }, 1000);
-            const mm = Number($('rainfallSlider').value);
-            appState.rainfallAmount = mm;
-            FloodSim.state.storm = mm;
+            // one storm for the demo: steady monsoon rain for the full 24 h
+            appState.rainfallAmount = FloodSim.state.storm;
             FloodSim.setVillage(appState.currentVillageId);
         },
         /** Vertical exaggeration per area: enough to read the relief, not so much that SRTM noise shows. */
