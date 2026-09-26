@@ -118,6 +118,7 @@
             map.getSource('flood-grid-src').setData(fc);
         } else {
             map.addSource('flood-grid-src', { type: 'geojson', data: fc });
+            const firstWater = map.getStyle().layers.find(l => l.id.startsWith('flood-sim-'));
             const before = ['village-boundary-layer', 'village-boundary-glow'].find(id => map.getLayer(id));
             map.addLayer({
                 id: 'flood-grid-fill', type: 'fill', source: 'flood-grid-src',
@@ -132,7 +133,7 @@
                         13, ['case', ['boolean', ['feature-state', 'hover'], false], 0.4,
                             ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.03, 1, 0.06, 2, 0.14, 3, 0.18, 0.24]]]
                 }
-            }, before);
+            }, firstWater ? firstWater.id : before);
             map.addLayer({
                 id: 'flood-grid-line', type: 'line', source: 'flood-grid-src',
                 paint: {
@@ -198,6 +199,7 @@
         stats.forEach((s, idx) => map.setFeatureState({ source: 'flood-grid-src', id: idx }, { risk: s.risk }));
         labels.forEach(l => { const r = stats[l.idx] ? stats[l.idx].risk : 0; if (l.el.dataset.risk !== String(r)) l.el.dataset.risk = r; });
         if (labels.length) syncLabels();
+        if (window.FloodRender) FloodRender.invalidate();
         if (hoverId !== null && popup) popup.setHTML(card(hoverId, true));
     }
 
@@ -237,6 +239,7 @@
             if (hoverId !== null) map.setFeatureState({ source: 'flood-grid-src', id: hoverId }, { hover: false });
             hoverId = f.id;
             map.setFeatureState({ source: 'flood-grid-src', id: hoverId }, { hover: true });
+            if (window.FloodRender) FloodRender.invalidate();
         }
         if (!popup) popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'grid-popup', maxWidth: '280px', offset: 14 });
         popup.setLngLat(e.lngLat).setHTML(card(hoverId, true)).addTo(map);
@@ -246,6 +249,7 @@
         map.getCanvas().style.cursor = '';
         if (hoverId !== null) map.setFeatureState({ source: 'flood-grid-src', id: hoverId }, { hover: false });
         hoverId = null;
+        if (window.FloodRender) FloodRender.invalidate();
         if (popup) popup.remove();
     }
 
