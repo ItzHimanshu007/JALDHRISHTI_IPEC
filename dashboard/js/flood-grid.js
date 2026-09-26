@@ -204,9 +204,9 @@
                     // strong at district scale, light when zoomed in so the water shows through
                     'fill-opacity': ['interpolate', ['linear'], ['zoom'],
                         9, ['case', ['boolean', ['feature-state', 'hover'], false], 0.85,
-                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.32, 1, 0.4, 2, 0.6, 3, 0.66, 0.78]],
+                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.26, 1, 0.32, 2, 0.5, 3, 0.56, 0.66]],
                         10.8, ['case', ['boolean', ['feature-state', 'hover'], false], 0.7,
-                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.18, 1, 0.24, 2, 0.42, 3, 0.48, 0.58]],
+                            ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.14, 1, 0.2, 2, 0.34, 3, 0.4, 0.5]],
                         13, ['case', ['boolean', ['feature-state', 'hover'], false], 0.4,
                             ['match', ['coalesce', ['feature-state', 'risk'], 0], 0, 0.03, 1, 0.06, 2, 0.14, 3, 0.18, 0.24]]]
                 }

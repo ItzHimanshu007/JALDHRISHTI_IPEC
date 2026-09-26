@@ -179,10 +179,25 @@
             field.c[i] = (f0.conc[i] * ia + f1.conc[i] * a) / 255;
             if (d > 0.08 && field.u[i] * field.u[i] + field.v[i] * field.v[i] > 0.02) spawnCells.push(i);
         }
-        // Display depth: water also tints the cells around it (60 % of the
-        // neighbouring depth), so one-cell channels and thin sheets stay
-        // readable when the whole district is on screen. Physics is untouched.
-        const nx = st.terrain.nx, ny = st.terrain.ny, raw = field.raw, dd = field.d;
+        // ---- display fields (physics untouched)
+        const t = st.terrain, nx = t.nx, ny = t.ny, raw = field.raw, dd = field.d;
+        if (!field.trace || field.trace.length !== N) {
+            field.trace = new Float32Array(N); field.shade = new Float32Array(N);
+            field.steep = new Float32Array(N); field.thr = new Float32Array(N);
+        }
+        // terrain steepness: thin runoff sheets on hillsides are not "flood",
+        // only water gathered into gullies and streams is drawn there
+        if (field.steepFor !== st.runId) {
+            field.steepFor = st.runId;
+            for (let i = 0; i < N; i++) {
+                const sd = Math.max(0, Math.min(1, (t.slope[i] - 6) / 24));
+                field.steep[i] = sd * sd * (3 - 2 * sd);
+                field.thr[i] = 0.25 * field.steep[i];
+            }
+        }
+        const peak = f0.peak;
+        const dx = t.dx, dy = t.dy;
+        const SUN_X = -0.5, SUN_Y = -0.5, SUN_Z = 0.707;      // light from the north-west, 45° up
         for (let r = 0; r < ny; r++) {
             for (let c = 0; c < nx; c++) {
                 const i = r * nx + c;
@@ -198,18 +213,44 @@
                 // deep channels widen a little so rivers read at district scale
                 let v = 0.35 * raw[i] + 0.65 * sum / n;
                 if (m > 1) v = Math.max(v, 0.45 * m);
-                dd[i] = v;
+                dd[i] = Math.max(0, v - field.thr[i]);          // hillside sheet flow drops out
+                field.trace[i] = peak ? peak[i] / 1000 : 0;
+                // light the water surface (ground + water) with the sun: sheets on
+                // slopes and water in shadowed valleys read with the terrain
+                const cl = c > 0 ? i - 1 : i, cr = c < nx - 1 ? i + 1 : i;
+                const ru = r > 0 ? i - nx : i, rd = r < ny - 1 ? i + nx : i;
+                const gx = ((t.z[cr] + raw[cr]) - (t.z[cl] + raw[cl])) / ((cr - cl) * dx || 1);
+                const gy = ((t.z[rd] + raw[rd]) - (t.z[ru] + raw[ru])) / (((rd - ru) / nx) * dy || 1);
+                const len = Math.sqrt(gx * gx + gy * gy + 1);
+                const lam = (-gx * SUN_X - gy * SUN_Y + SUN_Z) / len;   // 0.707 for flat water
+                field.shade[i] = Math.max(0.55, Math.min(1.25, lam / 0.707));
             }
         }
     }
 
     // ---------------------------------------------------------------- water pixels
-    // Floodwater: open blue that reads clearly over green fields, deepening
-    // with depth; river / breach water carries a silt tint (never fully brown,
-    // so a flooded plain still reads as water from district scale).
-    const CLEAR_SHALLOW = [74, 160, 226], CLEAR_DEEP = [10, 46, 118];
-    const MUD_SHALLOW = [132, 128, 104], MUD_DEEP = [58, 64, 78];
+    // Realistic floodwater seen from above: shallow water is murky and lets the
+    // ground show through, deeper water turns slate blue; river, breach and
+    // debris water carries silt. Calm water on the plains picks up a soft sky
+    // sheen; fast water in steep channels breaks white. Land that flooded and
+    // has drained keeps a faint silt stain.
+    const WATER_RAMP = [                      // [depth m, r, g, b, alpha]
+        [0.05, 112, 128, 118, 0.42],
+        [0.3, 86, 114, 118, 0.62],
+        [1.0, 54, 88, 110, 0.8],
+        [2.5, 30, 60, 88, 0.9],
+        [99, 22, 46, 72, 0.93]
+    ];
+    const SILT = [124, 104, 74];
     const DEPTH_CLASSES = [[0.15, [170, 220, 245]], [0.5, [100, 180, 235]], [1, [45, 130, 215]], [2, [25, 80, 180]], [99, [30, 40, 130]]];
+
+    function rampAt(D) {
+        let k = 0;
+        while (k < WATER_RAMP.length - 1 && D > WATER_RAMP[k + 1][0]) k++;
+        const a = WATER_RAMP[k], b = WATER_RAMP[Math.min(WATER_RAMP.length - 1, k + 1)];
+        const f = b === a ? 0 : Math.max(0, Math.min(1, (D - a[0]) / (b[0] - a[0])));
+        return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f, a[4] + (b[4] - a[4]) * f];
+    }
 
     function drawWater(timeSec) {
         const st = FloodSim.state, t = st.terrain;
@@ -217,7 +258,7 @@
         const data = img.data;
         data.fill(0);
         if (!field) { ctx.putImageData(img, 0, 0); return; }
-        const { d, u, v, c } = field;
+        const { d, u, v, c, trace, shade, steep } = field;
         const mask = t.mask;
         const NZ = 256;
         const period = 3.2, ph = (timeSec / period) % 1, ph2 = (ph + 0.5) % 1;
@@ -255,11 +296,23 @@
                         data[o] = 235; data[o + 1] = 80; data[o + 2] = 60; data[o + 3] = 150;
                     }
                 }
-                if (D < 0.05 || (!inside && D < 0.3)) continue;        // outside the boundary only rivers / deep water
+                if (D < 0.05 || (!inside && D < 0.3)) {
+                    // drained flood trace: silt and wet ground where water stood
+                    if (inside && !depthMode) {
+                        const T = trace[i00] * w00 + trace[i01] * w01 + trace[i10] * w10 + trace[i11] * w11;
+                        if (T > 0.2 && data[o + 3] === 0) {
+                            const a = Math.min(0.3, (T - 0.2) * 0.35) * (1 - D / 0.05);
+                            data[o] = SILT[0]; data[o + 1] = SILT[1]; data[o + 2] = SILT[2]; data[o + 3] = a * 255;
+                        }
+                    }
+                    continue;
+                }
 
                 const U = u[i00] * w00 + u[i01] * w01 + u[i10] * w10 + u[i11] * w11;
                 const V = v[i00] * w00 + v[i01] * w01 + v[i10] * w10 + v[i11] * w11;
                 const C = c[i00] * w00 + c[i01] * w01 + c[i10] * w10 + c[i11] * w11;
+                const SH = shade[i00] * w00 + shade[i01] * w01 + shade[i10] * w10 + shade[i11] * w11;
+                const ST = steep[i00] * w00 + steep[i01] * w01 + steep[i10] * w10 + steep[i11] * w11;
                 const speed = Math.sqrt(U * U + V * V);
 
                 // flow-map ripples: two phases of the same noise, advected with the flow
@@ -267,33 +320,42 @@
                 const bx = (px + 97 + drift - U * ph2 * flowK) & (NZ - 1), by = (py + 41 + drift * 0.6 - V * ph2 * flowK) & (NZ - 1);
                 const nz = noise[ay * NZ + ax] * wA + noise[by * NZ + bx] * wB;
 
-                let R, Gc, B;
+                let R, Gc, B, alpha;
                 if (depthMode) {
                     let k = 0; while (D > DEPTH_CLASSES[k][0]) k++;
                     [R, Gc, B] = DEPTH_CLASSES[k][1];
+                    alpha = 0.85;
                 } else {
-                    const td = Math.sqrt(Math.min(1, D / 3));
-                    const cr = CLEAR_SHALLOW[0] + (CLEAR_DEEP[0] - CLEAR_SHALLOW[0]) * td;
-                    const cg = CLEAR_SHALLOW[1] + (CLEAR_DEEP[1] - CLEAR_SHALLOW[1]) * td;
-                    const cb = CLEAR_SHALLOW[2] + (CLEAR_DEEP[2] - CLEAR_SHALLOW[2]) * td;
-                    const mr = MUD_SHALLOW[0] + (MUD_DEEP[0] - MUD_SHALLOW[0]) * td;
-                    const mg = MUD_SHALLOW[1] + (MUD_DEEP[1] - MUD_SHALLOW[1]) * td;
-                    const mb = MUD_SHALLOW[2] + (MUD_DEEP[2] - MUD_SHALLOW[2]) * td;
-                    const m = Math.min(0.55, C * 0.8);
-                    R = cr + (mr - cr) * m; Gc = cg + (mg - cg) * m; B = cb + (mb - cb) * m;
+                    const col = rampAt(D);
+                    const m = Math.min(0.7, C * 0.85);             // silt / debris load
+                    R = col[0] + (SILT[0] - col[0]) * m;
+                    Gc = col[1] + (SILT[1] - col[1]) * m;
+                    B = col[2] + (SILT[2] - col[2]) * m;
+                    alpha = col[3];
+                    // terrain-lit surface
+                    R *= SH; Gc *= SH; B *= SH;
+                    // calm, deeper water reflects a pale sky, broken up by slow ripples
+                    const calm = Math.max(0, 1 - speed / 0.8) * Math.min(1, (D - 0.2) / 0.8) * (1 - ST);
+                    if (calm > 0) {
+                        const sheen = calm * (0.1 + 0.12 * nz);
+                        R += (176 - R) * sheen; Gc += (192 - Gc) * sheen; B += (204 - B) * sheen;
+                    }
                 }
                 // ripple shading, stronger in moving water
-                const amp = 0.08 + Math.min(0.25, speed * 0.14);
-                let shade = 1 + (nz - 0.5) * 2 * amp;
-                R *= shade; Gc *= shade; B *= shade;
-                // specular glints and white water
-                const glint = nz > 0.76 ? (nz - 0.76) * 2.6 : 0;
-                const foam = speed > 2.2 ? Math.min(1, (speed - 2.2) * 0.35) * (nz > 0.6 ? 1 : 0.15) : 0;
-                const wLift = Math.max(glint * 0.4, foam * 0.55);
-                R += (235 - R) * wLift; Gc += (240 - Gc) * wLift; B += (240 - B) * wLift;
-                // soft shoreline: shallow edges fade in, with a faint wet rim
+                const amp = 0.05 + Math.min(0.22, speed * 0.12);
+                const shadeR = 1 + (nz - 0.5) * 2 * amp;
+                R *= shadeR; Gc *= shadeR; B *= shadeR;
+                // white water: fast flow, especially in steep channels
+                // white water only as streaks in the fastest, steepest reaches
+                const rough = speed * (0.3 + 1.2 * ST);             // lowland rivers never break white
+                const foam = inside && rough > 2.4 ? Math.min(1, (rough - 2.4) * 0.3) * (nz > 0.62 ? 1 : 0.12) : 0;
+                const glint = inside && D > 0.5 && nz > 0.84 ? (nz - 0.84) * 1.2 * (1 - ST) : 0;
+                const wLift = Math.max(glint * 0.35, foam * 0.5);
+                R += (228 - R) * wLift; Gc += (232 - Gc) * wLift; B += (228 - B) * wLift;
+                if (foam > 0) alpha = Math.max(alpha, 0.5 + 0.25 * foam);
+                // soft shoreline
                 const edge = D < 0.15 ? (D - 0.05) / 0.1 : 1;
-                const alpha = (depthMode ? 0.85 : 0.62 + 0.3 * Math.min(1, D / 1.2)) * (0.35 + 0.65 * edge * edge * (3 - 2 * edge)) * (inside ? 1 : 0.3);
+                alpha *= (0.35 + 0.65 * edge * edge * (3 - 2 * edge)) * (inside ? 1 : 0.3);
                 data[o] = R > 255 ? 255 : R; data[o + 1] = Gc > 255 ? 255 : Gc; data[o + 2] = B > 255 ? 255 : B;
                 data[o + 3] = Math.max(data[o + 3], alpha * 255);
             }

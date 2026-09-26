@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.5">
+    <link rel="stylesheet" href="css/ops.css?v=1.6">
 </head>
 
 <body>
@@ -119,9 +119,9 @@
                             <button type="button" data-style="depth">Depth classes</button>
                         </div>
                         <div class="legend-bar legend-bar--natural" id="legendNatural">
-                            <div class="legend-ramp"><span style="background:#60aac4"></span><span style="background:#27608a"></span><span style="background:#10385e"></span></div>
-                            <div class="legend-ramp"><span style="background:#a88a5c"></span><span style="background:#7e5f3c"></span><span style="background:#5c442a"></span></div>
-                            <div class="legend-labels"><span>shallow</span><span>clear / silt-laden</span><span>deep</span></div>
+                            <div class="legend-ramp"><span style="background:#708076"></span><span style="background:#567276"></span><span style="background:#36586e"></span><span style="background:#1e3c58"></span></div>
+                            <div class="legend-labels"><span>0.1</span><span>0.3</span><span>1</span><span>2.5+ m</span></div>
+                            <div class="legend-labels legend-labels--left"><span><i class="swatch" style="background:#7c684a"></i>silt-laden</span><span><i class="swatch" style="background:rgba(124,104,74,.45)"></i>drained, silt left</span></div>
                         </div>
                         <div class="legend-bar" id="legendDepth" hidden>
                             <div class="legend-ramp legend-ramp--classes"><span style="background:#aadcf5"></span><span style="background:#64b4eb"></span><span style="background:#2d82d7"></span><span style="background:#1950b4"></span><span style="background:#1e2882"></span></div>
@@ -216,8 +216,8 @@
         <div class="map-legend" id="mapLegend">
             <div class="map-legend__block">
                 <div class="map-legend__title">Floodwater depth</div>
-                <div class="map-legend__ramp"><span style="background:#4aa0e2"></span><span style="background:#2e79c6"></span><span style="background:#1a55a0"></span><span style="background:#0a2e76"></span></div>
-                <div class="map-legend__labels mono"><span>0.1</span><span>0.5</span><span>1</span><span>2+ m</span></div>
+                <div class="map-legend__ramp"><span style="background:#708076"></span><span style="background:#567276"></span><span style="background:#36586e"></span><span style="background:#1e3c58"></span></div>
+                <div class="map-legend__labels mono"><span>0.1</span><span>0.3</span><span>1</span><span>2.5+ m</span></div>
             </div>
             <div class="map-legend__block" id="mapLegendGrid">
                 <div class="map-legend__title">Risk grid</div>
@@ -282,11 +282,11 @@
     <script src="js/voice-settings.js?v=1.0"></script>
     <script src="js/reports-store.js?v=1.0"></script>
     <script src="js/voice-service.js?v=1.0"></script>
-    <script src="js/flood-scenarios.js?v=1.3"></script>
+    <script src="js/flood-scenarios.js?v=1.4"></script>
     <script src="js/flood-sim-solver.js?v=1.1"></script>
-    <script src="js/flood-sim.js?v=1.2"></script>
-    <script src="js/flood-render.js?v=1.2"></script>
-    <script src="js/flood-grid.js?v=1.4"></script>
+    <script src="js/flood-sim.js?v=1.3"></script>
+    <script src="js/flood-render.js?v=1.3"></script>
+    <script src="js/flood-grid.js?v=1.5"></script>
     <script src="js/enhanced.js?v=4.3"></script>
     <script src="js/ops-ui.js?v=1.4"></script>
     <script>
