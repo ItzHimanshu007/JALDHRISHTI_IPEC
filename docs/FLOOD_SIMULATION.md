@@ -4,11 +4,13 @@ The dashboard runs a 2D shallow-water model live in the browser over each
 village's **whole administrative area** (Meppadi panchayat at 100 m cells;
 Darbhanga and Dhemaji districts, ~2,500 km² each, at 320 m / 400 m cells).
 Terrain is real (SRTM via AWS Terrarium tiles); rainfall, river flows, breach
-and slope-failure timings are **synthetic**. The demo runs one storm in every area:
-200 mm of steady monsoon rain that starts at T+0 and falls at a near-constant
-rate (about 8 mm/h, a few per cent of natural flicker, no bursts) for the full
-24 h, so floodwater keeps building and the worst case is at the end
-(`FloodSim.setStorm(mm)` still rescales it from code). The player bar
+and slope-failure timings are **synthetic**. Every area gets steady monsoon
+rain that starts at T+0 and falls at a near-constant rate (a few per cent of
+natural flicker, no bursts) for the full 24 h, so floodwater keeps building and
+the worst case is at the end. The total is set per area in `flood-sim.js`
+(`STORM_MM`): 400 mm for Meppadi (about 17 mm/h; the Western Ghats get far more
+rain than the plains) and 200 mm for Darbhanga and Dhemaji (about 8 mm/h).
+`FloodSim.setStorm(mm)` still overrides it from code. The player bar
 shows **water accumulated**: the floodwater standing inside the boundary above
 the T+0 level (m³ and crore litres), its change over the last hour, and a 24 h
 sparkline.
@@ -30,7 +32,7 @@ sparkline.
 - **Meppadi (Wayanad): flash flood + debris flow.** Steady orographic rain over
   the Ghats (more on the high ground). An infinite-slope stability model (c' 9 kPa, φ' 34°, 2.5 m soil,
   pore pressure from cumulative rain) decides whether the scarp above
-  Punchirimattam fails (from about 120 mm/24 h). The debris volume is routed
+  Punchirimattam fails (at 400 mm: T+6.8 h, with a second failure at T+7.6 h). The debris volume is routed
   down the real valley through Mundakkai and Chooralmala.
 - **Darbhanga: embanked rivers, breaches, drainage congestion.** Rivers entering
   from the Nepal side are found from drainage area on the north/west edges and

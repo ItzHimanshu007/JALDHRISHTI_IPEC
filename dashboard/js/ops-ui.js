@@ -93,7 +93,7 @@
                 return kpi('Grid cells high / severe', g ? `${hi}/${g.total}` : '--', '', null, g && g.counts[4] ? 'red' : (hi ? 'orange' : null))
                     .replace('</div></div>', `</div><div class="kpi__delta">deepest water ${d ? d.maxDepth.toFixed(1) : '0.0'} m</div></div>`);
             })(),
-            kpi('Rain now', s.rainNow.toFixed(1), 'mm/h', null, s.rainSoFar >= 115.6 ? 'orange' : (s.rainSoFar >= 64.5 ? 'yellow' : null))
+            kpi('Rain now', s.rainNow.toFixed(1), 'mm/h', null, s.rainSoFar >= 204.5 ? 'red' : (s.rainSoFar >= 115.6 ? 'orange' : (s.rainSoFar >= 64.5 ? 'yellow' : null)))
                 .replace('</div></div>', `</div><div class="kpi__delta">${Math.round(s.rainSoFar)} mm since T+0</div></div>`),
             kpi('Facilities affected', `${affected}/${fac.length}`, '', null, affected ? 'orange' : null)
         ].join('');
@@ -655,9 +655,9 @@
             let loaded = false;
             map.once('load', () => { loaded = true; });
             const nudge = setInterval(() => { if (loaded) clearInterval(nudge); else map.triggerRepaint(); }, 1000);
-            // one storm for the demo: steady monsoon rain for the full 24 h
-            appState.rainfallAmount = FloodSim.state.storm;
+            // steady monsoon rain for the full 24 h; the storm total is set per area (FloodSim)
             FloodSim.setVillage(appState.currentVillageId);
+            appState.rainfallAmount = FloodSim.state.storm;
         },
         /** Vertical exaggeration per area: enough to read the relief, not so much that SRTM noise shows. */
         terrainExaggeration(id) { return terrainOn ? (VIEW[id] || VIEW.default).exaggeration : 0; },
@@ -693,6 +693,7 @@
             stopTour();
             closeSimInspector();
             FloodSim.setVillage(id);
+            appState.rainfallAmount = FloodSim.state.storm;
         },
         /** Short spoken/printed summary of the current situation. */
         summary() {

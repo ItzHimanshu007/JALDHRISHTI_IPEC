@@ -2485,7 +2485,7 @@ function calculateAffectedPopulation(timeStep) {
     if (!config) return null;
 
     const bbox = config.bbox;
-    const intensity = appState.rainfallAmount / 200; // Normalized 0-1
+    const intensity = Math.min(1.5, appState.rainfallAmount / 200); // 1 = the 200 mm reference storm
 
     const stats = {
         high: 0,
@@ -2827,7 +2827,7 @@ async function optimizeAllocation() {
 
     const villageId = appState.currentVillageId;
     const centers = RESCUE_HUBS[villageId] || RESCUE_HUBS['wayanad_meppadi'];
-    const intensity = appState.rainfallAmount / 200; // 0 to 1 scaling
+    const intensity = Math.min(1.5, appState.rainfallAmount / 200); // 1 = the 200 mm reference storm
 
     if (!appState.apiData?.population || appState.apiData.population?.metadata?.village_id !== villageId) {
         appState.apiData.population = generatePopulationData(villageId);
