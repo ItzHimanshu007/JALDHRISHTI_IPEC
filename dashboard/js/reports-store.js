@@ -1,9 +1,9 @@
 /**
  * Jal Drishti - Reports Store
  * ---------------------------------------------------------------------------
- * The existing report generation flow (generateReport() / generateTextReport()
- * for the flood-risk report, generateDeploymentReport() for the tactical
- * deployment report - both in enhanced.js) only ever built a text string in
+ * The report generation flow (generateReport() / generateTextReport() for
+ * the flood-risk report in enhanced.js; older versions also had a tactical
+ * deployment report, which may still be listed) only ever built a text string in
  * memory and immediately downloaded it as a .txt file; nothing about a
  * generated report was ever retained, so there was no existing "report
  * history" to reuse.
