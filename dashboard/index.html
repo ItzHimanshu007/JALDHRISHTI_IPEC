@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.9">
+    <link rel="stylesheet" href="css/ops.css?v=2.0">
 </head>
 
 <body>
@@ -41,14 +41,6 @@
             </div>
 
             <div class="topbar__clock">
-                <div class="clock-block">
-                    <span class="clock-label">Scenario time</span>
-                    <span class="clock-value mono" id="opsClockT">T+00:00</span>
-                </div>
-                <div class="clock-block">
-                    <span class="clock-label">Local</span>
-                    <span class="clock-value mono" id="opsClockLocal">--:--</span>
-                </div>
                 <div class="alert-chip" id="opsAlert" data-level="green">
                     <span class="alert-chip__label">Alert</span>
                     <span class="alert-chip__value" id="opsAlertText">Green</span>
@@ -261,7 +253,7 @@
     <script src="js/flood-grid.js?v=1.9"></script>
     <script src="js/flood-routes.js?v=1.1"></script>
     <script src="js/enhanced.js?v=4.6"></script>
-    <script src="js/ops-ui.js?v=1.7"></script>
+    <script src="js/ops-ui.js?v=1.8"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             JalDrishtiNav.renderNav('#main-nav-links', 'dashboard', 'btn btn--ghost');

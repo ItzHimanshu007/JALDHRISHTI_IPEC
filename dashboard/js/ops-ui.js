@@ -61,8 +61,6 @@
 
     // ------------------------------------------------------------ top bar + KPIs
     function renderClock(s) {
-        $('opsClockT').textContent = fmtT(s.t);
-        $('opsClockLocal').textContent = s.scenario ? s.scenario.clock(s.t) + ' IST' : '--:--';
         const a = $('opsAlert');
         a.dataset.level = s.alert;
         $('opsAlertText').textContent = LEVEL_NAME[s.alert];

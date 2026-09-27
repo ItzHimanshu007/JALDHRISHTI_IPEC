@@ -78,9 +78,6 @@ button, select, input { font: inherit; color: inherit; }
 .tag { border: 1px solid var(--line-2); border-radius: 4px; padding: 2px 7px; font-size: 11.5px; white-space: nowrap; color: var(--text); background: var(--panel-2); }
 .tag--muted { color: var(--muted); background: transparent; border-style: dashed; cursor: help; }
 .topbar__clock { display: flex; align-items: center; gap: 16px; margin-left: auto; }
-.clock-block { display: flex; flex-direction: column; line-height: 1.15; }
-.clock-label { font-size: 10.5px; color: var(--muted); }
-.clock-value { font-size: 15px; font-weight: 500; }
 .alert-chip { display: flex; flex-direction: column; line-height: 1.15; padding: 4px 10px; border-radius: var(--r); border: 1px solid var(--line-2); min-width: 84px; }
 .alert-chip__label { font-size: 10.5px; color: var(--muted); }
 .alert-chip__value { font-weight: 600; font-size: 14px; }
