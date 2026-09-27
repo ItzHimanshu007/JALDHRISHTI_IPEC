@@ -248,7 +248,7 @@
                 vol += d * cellArea;
                 if (d > 0.02 && !chan[i]) { sum += d; n++; sed += f.conc[i]; }
                 if (!chan[i] && d > max) max = d;             // flood depth on land, not in the river bed
-                if (d > 0.15 && !chan[i]) wet++;
+                if (d > 0.1 && !chan[i]) wet++;                // same threshold the map draws water from
                 const sp = Math.hypot(f.u[i], f.v[i]) / 10;
                 if (sp > vmax && d > 0.05) vmax = sp;
                 if (d >= 0.3) atRisk += st.cellPop[i];
@@ -261,8 +261,9 @@
             let risk = 0;
             if ((max >= 2 && wetFrac >= 0.35) || lifeFrac >= 0.12) risk = 4;
             else if ((max >= 1 && wetFrac >= 0.2) || wetFrac >= 0.5 || popFrac >= 0.25) risk = 3;
-            else if ((max >= 0.5 && wetFrac >= 0.05) || wetFrac >= 0.12 || popFrac >= 0.06) risk = 2;
-            else if (wetFrac > 0.02) risk = 1;
+            // any visible flooding (a couple of cells or more, or a deep patch) is at least moderate
+            else if (wetFrac >= 0.03 || max >= 0.5 || popFrac >= 0.06) risk = 2;
+            else if (wet > 0) risk = 1;
             let index = Math.round(100 * Math.min(1, 0.4 * Math.min(1, max / 2.5) + 0.35 * wetFrac + 0.25 * Math.min(1, popFrac * 3)));
             // river in spate: the channel and the land between its embankments
             // are the most dangerous ground in a riverine flood

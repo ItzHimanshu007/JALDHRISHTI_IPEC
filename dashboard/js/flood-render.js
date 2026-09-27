@@ -59,6 +59,18 @@
         return g;
     }
 
+    /** Permanent river channels (water at T+0 by design, not flooding). */
+    let rivMask = null, rivFor = null;
+    function riverMask() {
+        const sc = FloodSim.state.scenario;
+        if (rivFor === sc && rivMask) return rivMask;
+        const N = FloodSim.state.terrain.nx * FloodSim.state.terrain.ny;
+        rivMask = new Uint8Array(N);
+        if (sc && sc.initialDepth) for (let i = 0; i < N; i++) if (sc.initialDepth[i] > 0) rivMask[i] = 1;
+        rivFor = sc;
+        return rivMask;
+    }
+
     // ---------------------------------------------------------------- setup
     function ensureLayer() {
         const st = FloodSim.state;
@@ -141,6 +153,7 @@
         field = null; fieldKey = '';
         particles = []; spawnCells = [];
         ensureLayer();
+        ensureArrowLayers();
         buildSlopeCriticals();
         buildMarkers();
     }
@@ -168,19 +181,24 @@
         if (key === fieldKey && field) return;
         fieldKey = key;
         const N = st.terrain.nx * st.terrain.ny;
-        if (!field || field.d.length !== N) field = { d: new Float32Array(N), raw: new Float32Array(N), u: new Float32Array(N), v: new Float32Array(N), c: new Float32Array(N) };
+        if (!field || field.d.length !== N) field = { d: new Float32Array(N), raw: new Float32Array(N), show: new Float32Array(N), u: new Float32Array(N), v: new Float32Array(N), c: new Float32Array(N) };
         const a = b.a, ia = 1 - a, f0 = b.f0, f1 = b.f1;
+        // What is drawn is what the grid and the figures count: floodwater above
+        // the level at T+0. River channels keep their full depth, so the rivers
+        // show before the storm; water the spin-up spread onto the land does not.
+        const base = st.frames[0].depth, riv = riverMask();
         spawnCells = [];
         for (let i = 0; i < N; i++) {
             const d = (f0.depth[i] * ia + f1.depth[i] * a) / 1000;
             field.raw[i] = d;
+            field.show[i] = riv[i] ? d : Math.max(0, d - base[i] / 1000);
             field.u[i] = (f0.u[i] * ia + f1.u[i] * a) / 10;
             field.v[i] = (f0.v[i] * ia + f1.v[i] * a) / 10;
             field.c[i] = (f0.conc[i] * ia + f1.conc[i] * a) / 255;
-            if (d > 0.08 && field.u[i] * field.u[i] + field.v[i] * field.v[i] > 0.02) spawnCells.push(i);
+            if (field.show[i] > 0.1 && field.u[i] * field.u[i] + field.v[i] * field.v[i] > 0.02) spawnCells.push(i);
         }
         // ---- display fields (physics untouched)
-        const t = st.terrain, nx = t.nx, ny = t.ny, raw = field.raw, dd = field.d;
+        const t = st.terrain, nx = t.nx, ny = t.ny, raw = field.raw, show = field.show, dd = field.d;
         if (!field.trace || field.trace.length !== N) {
             field.trace = new Float32Array(N); field.shade = new Float32Array(N);
             field.steep = new Float32Array(N); field.thr = new Float32Array(N);
@@ -204,17 +222,17 @@
                 let m = 0, sum = 0, n = 0;
                 for (let rr = Math.max(0, r - 1); rr <= Math.min(ny - 1, r + 1); rr++) {
                     for (let cc = Math.max(0, c - 1); cc <= Math.min(nx - 1, c + 1); cc++) {
-                        const v = raw[rr * nx + cc];
+                        const v = show[rr * nx + cc];
                         sum += v; n++;
                         if (v > m) m = v;
                     }
                 }
                 // blend with the 3x3 mean: isolated puddles fade, connected sheets stay;
                 // deep channels widen a little so rivers read at district scale
-                let v = 0.35 * raw[i] + 0.65 * sum / n;
+                let v = 0.35 * show[i] + 0.65 * sum / n;
                 if (m > 1) v = Math.max(v, 0.45 * m);
                 dd[i] = Math.max(0, v - field.thr[i]);          // hillside sheet flow drops out
-                field.trace[i] = peak ? peak[i] / 1000 : 0;
+                field.trace[i] = peak ? (riv[i] ? peak[i] : Math.max(0, peak[i] - base[i])) / 1000 : 0;
                 // light the water surface (ground + water) with the sun: sheets on
                 // slopes and water in shadowed valleys read with the terrain
                 const cl = c > 0 ? i - 1 : i, cr = c < nx - 1 ? i + 1 : i;
@@ -296,12 +314,12 @@
                         data[o] = 235; data[o + 1] = 80; data[o + 2] = 60; data[o + 3] = 150;
                     }
                 }
-                if (D < 0.05 || (!inside && D < 0.3)) {
+                if (D < 0.1 || (!inside && D < 0.3)) {
                     // drained flood trace: silt and wet ground where water stood
                     if (inside && !depthMode) {
                         const T = trace[i00] * w00 + trace[i01] * w01 + trace[i10] * w10 + trace[i11] * w11;
                         if (T > 0.2 && data[o + 3] === 0) {
-                            const a = Math.min(0.3, (T - 0.2) * 0.35) * (1 - D / 0.05);
+                            const a = Math.min(0.3, (T - 0.2) * 0.35) * (1 - D / 0.1);
                             data[o] = SILT[0]; data[o + 1] = SILT[1]; data[o + 2] = SILT[2]; data[o + 3] = a * 255;
                         }
                     }
@@ -354,13 +372,95 @@
                 R += (228 - R) * wLift; Gc += (232 - Gc) * wLift; B += (228 - B) * wLift;
                 if (foam > 0) alpha = Math.max(alpha, 0.5 + 0.25 * foam);
                 // soft shoreline
-                const edge = D < 0.15 ? (D - 0.05) / 0.1 : 1;
+                const edge = D < 0.2 ? (D - 0.1) / 0.1 : 1;
                 alpha *= (0.35 + 0.65 * edge * edge * (3 - 2 * edge)) * (inside ? 1 : 0.3);
                 data[o] = R > 255 ? 255 : R; data[o + 1] = Gc > 255 ? 255 : Gc; data[o + 2] = B > 255 ? 255 : B;
                 data[o + 3] = Math.max(data[o + 3], alpha * 255);
             }
         }
         ctx.putImageData(img, 0, 0);
+    }
+
+    // ---------------------------------------------------------------- flow arrows
+    // Crisp arrows on a lattice (a map symbol layer, so they stay sharp at any
+    // zoom and lie flat on the 3D terrain). Each shows the depth-weighted mean
+    // flow of its block; size and opacity grow with speed. Coarser lattices
+    // show when zoomed out, finer ones are added as you zoom in.
+    const ARROW_LEVELS = ['flood-flow-arrows-0', 'flood-flow-arrows-1', 'flood-flow-arrows-2'];
+    let arrowSteps = null, lastArrows = 0, arrowKey = '';
+
+    function arrowImage() {
+        const S = 40, cv = document.createElement('canvas');
+        cv.width = cv.height = S;
+        const g = cv.getContext('2d');
+        const path = () => { g.beginPath(); g.moveTo(20, 35); g.lineTo(20, 15); g.moveTo(11, 19); g.lineTo(20, 6); g.lineTo(29, 19); };
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(8, 14, 20, 0.85)'; g.lineWidth = 8; path(); g.stroke();
+        g.strokeStyle = '#ffffff'; g.lineWidth = 3.6; path(); g.stroke();
+        return g.getImageData(0, 0, S, S);
+    }
+
+    function ensureArrowLayers() {
+        const t = FloodSim.state.terrain;
+        if (!map || !t) return;
+        const s0 = Math.max(4, Math.round(Math.sqrt(t.nx * t.ny / 1000)));
+        arrowSteps = [s0, Math.max(1, Math.round(s0 / 2)), Math.max(1, Math.round(s0 / 4))];
+        const [w, , e] = t.bounds;
+        const z0 = Math.log2(1200 / ((e - w) / 360 * 512));          // zoom that shows the whole domain
+        if (!map.hasImage('flood-flow-arrow')) map.addImage('flood-flow-arrow', arrowImage(), { pixelRatio: 1.1 });
+        if (!map.getSource('flood-flow-arrows')) map.addSource('flood-flow-arrows', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        ARROW_LEVELS.forEach((id, lvl) => {
+            if (map.getLayer(id)) map.removeLayer(id);
+            map.addLayer({
+                id, type: 'symbol', source: 'flood-flow-arrows', filter: ['==', ['get', 'l'], lvl],
+                minzoom: lvl ? z0 + 0.8 * lvl + 0.4 : 0,
+                layout: {
+                    visibility: layerState.flow ? 'visible' : 'none',
+                    'icon-image': 'flood-flow-arrow', 'icon-rotate': ['get', 'b'],
+                    'icon-rotation-alignment': 'map', 'icon-pitch-alignment': 'viewport',   // point along the flow, stay readable when tilted
+                    'icon-allow-overlap': true, 'icon-ignore-placement': true,
+                    // zoom must be the outermost input of a layout expression
+                    'icon-size': ['interpolate', ['linear'], ['zoom'],
+                        z0 - 1.5, ['*', ['get', 'k'], 0.35], z0, ['*', ['get', 'k'], 0.8], z0 + 3, ['*', ['get', 'k'], 1.1]]
+                },
+                paint: { 'icon-opacity': ['get', 'o'] }
+            });
+        });
+        arrowKey = '';
+    }
+
+    function updateArrows(now) {
+        if (!layerState.flow || !field || !arrowSteps || !map.getSource('flood-flow-arrows')) return;
+        if (arrowKey === fieldKey || now - lastArrows < 250) return;
+        arrowKey = fieldKey; lastArrows = now;
+        const t = FloodSim.state.terrain, nx = t.nx, ny = t.ny, [s0, s1, s2] = arrowSteps;
+        const feats = [];
+        const h = Math.max(1, Math.floor(s2 / 2));
+        for (let r = h; r < ny; r += s2) {
+            for (let c = h; c < nx; c += s2) {
+                const i0 = r * nx + c;
+                if (!t.mask[i0]) continue;
+                // depth-weighted mean flow over the block
+                let su = 0, sv = 0, sd = 0, wet = 0, n = 0;
+                const b = Math.max(1, Math.ceil(s2 / 2));
+                for (let rr = Math.max(0, r - b); rr <= Math.min(ny - 1, r + b); rr++) {
+                    for (let cc = Math.max(0, c - b); cc <= Math.min(nx - 1, c + b); cc++) {
+                        const i = rr * nx + cc, d = field.d[i];
+                        n++;
+                        if (d < 0.1) continue;
+                        wet++; su += field.u[i] * d; sv += field.v[i] * d; sd += d;
+                    }
+                }
+                if (!sd || wet < 2 || wet / n < 0.2) continue;       // narrow hill streams still count
+                const U = su / sd, V = sv / sd, sp = Math.hypot(U, V);
+                if (sp < 0.04) continue;                               // still water: no arrow
+                const l = (r - h) % s0 === 0 && (c - h) % s0 === 0 ? 0 : ((r - h) % s1 === 0 && (c - h) % s1 === 0 ? 1 : 2);
+                const q = Math.min(1, sp / 1.2);
+                feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: t.toLngLat(i0) },
+                    properties: { l, b: Math.round(Math.atan2(U, -V) * 180 / Math.PI), k: +(0.55 + 0.45 * q).toFixed(2), o: +(0.6 + 0.4 * Math.min(1, sp / 0.5)).toFixed(2) } });
+            }
+        }
+        map.getSource('flood-flow-arrows').setData({ type: 'FeatureCollection', features: feats });
     }
 
     // ---------------------------------------------------------------- particles
@@ -377,7 +477,7 @@
             const i = r * nx + c;
             const U = field.u[i], V = field.v[i], sp = Math.hypot(U, V);
             p.age += dtReal;
-            if (field.d[i] < 0.06 || sp < 0.08 || p.age > p.life) { Object.assign(p, spawn()); continue; }
+            if (field.d[i] < 0.1 || sp < 0.08 || p.age > p.life) { Object.assign(p, spawn()); continue; }
             const k = 1.6 * dtReal;                        // cells per (m/s) per real second
             p.x += U * k * 100 / t.dx; p.y += V * k * 100 / t.dy;
             const len = Math.min(3.5, 0.9 + sp * 0.9);
@@ -506,6 +606,7 @@
                 drawParticles(wdt);
                 blitTiles();
                 invalidateTerrain();
+                updateArrows(now);
             }
             syncMarkers();
         }
@@ -525,6 +626,7 @@
             layerState[key] = value;
             if (key === 'water' && map) tiles.forEach(tl => { if (map.getLayer(tl.layer)) map.setLayoutProperty(tl.layer, 'visibility', value ? 'visible' : 'none'); });
             if (key === 'style' || key === 'slope') fieldKey = '';
+            if (key === 'flow' && map) { ARROW_LEVELS.forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', value ? 'visible' : 'none'); }); arrowKey = ''; }
         },
         get(key) { return layerState[key]; },
         invalidate: invalidateTerrain
