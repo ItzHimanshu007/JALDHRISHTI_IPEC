@@ -3,334 +3,367 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Methodology — Jal Drishti | AI-Driven Flood Intelligence</title>
-<meta name="description" content="Technical methodology behind Jal Drishti's hydrological pipeline, ML risk classification, and tactical flood response system.">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>Methodology · Jal Drishti</title>
+<meta name="description" content="How the Jal Drishti flood simulation works: terrain preparation, the shallow-water model, the three flood scenarios, how risk is scored, and the model's limits.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-<link rel="stylesheet" href="css/methodology.css">
+<link rel="stylesheet" href="css/methodology.css?v=2.0">
 </head>
 <body>
 
-<!-- Animated Background -->
-<canvas id="bgCanvas"></canvas>
+<header class="bar">
+  <a href="index.html" class="brand"><span class="brand__mark"></span>Jal Drishti <span class="brand__sub">Methodology</span></a>
+  <nav class="bar__nav" id="main-nav-links"></nav>
+</header>
 
-<!-- Navbar -->
-<nav class="navbar" id="navbar">
-  <a href="index.html" class="nav-brand">
-    <div class="logo-icon"><svg width="18" height="18" viewBox="0 0 18 18"><path class="logo-wave" d="M2 11 Q5 7 9 9 Q13 11 16 7"/><path class="logo-wave" d="M2 14 Q5 10 9 12 Q13 14 16 10"/></svg></div>
-    <div><div class="logo-text">JAL DRISHTI</div><div class="logo-sub">Technical Methodology</div></div>
-  </a>
-  <div class="nav-links" id="main-nav-links">
-    <!-- Populated by nav.js: shows every other page's link, never the current one -->
+<div class="layout">
+
+<aside class="toc" aria-label="Contents">
+  <div class="toc__title">Contents</div>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#areas">Study areas</a></li>
+    <li><a href="#terrain">Terrain</a></li>
+    <li><a href="#model">Flow model</a></li>
+    <li><a href="#forcing">Rain and river inflows</a></li>
+    <li><a href="#scenarios">The three scenarios</a></li>
+    <li><a href="#risk">From water depth to risk</a></li>
+    <li><a href="#display">What the map shows</a></li>
+    <li><a href="#checks">Checks and run times</a></li>
+    <li><a href="#limits">Limitations</a></li>
+    <li><a href="#next">Towards an operational system</a></li>
+    <li><a href="#refs">References</a></li>
+  </ol>
+</aside>
+
+<main class="doc">
+
+<p class="doc__kicker">Technical note</p>
+<h1>How the flood simulation works</h1>
+<p class="lede">Jal Drishti runs a two-dimensional flood model in the browser over the whole of
+Meppadi panchayat (Wayanad), Darbhanga district (Bihar) and Dhemaji district (Assam). This note
+describes what the model computes, which inputs are real and which are made up for the
+demonstration, and where the results should not be trusted.</p>
+
+<section id="summary">
+<h2><span class="n">1</span>Summary</h2>
+<p>For each area the dashboard simulates one day of steady monsoon rain: 200&nbsp;mm falling
+at a near-constant rate from T+0 to T+24&nbsp;h. Water moves over the real terrain according to
+the shallow-water equations, collects in valleys and low plains, and is added to by rivers
+entering from outside the area. Every 10–15 simulated minutes the model saves a snapshot of
+water depth and velocity; the map, the hexagon grid, the gauge chart and the situation
+figures are all read from those snapshots.</p>
+<p>The three areas flood for different reasons, so each has its own scenario: a flash flood with a
+debris flow in the Western Ghats, embankment breaches on the Bihar plain, and flash
+tributaries against a rising Brahmaputra in Assam.</p>
+
+<table class="tbl tbl--status">
+  <caption>What is real and what is synthetic</caption>
+  <thead><tr><th>Input</th><th>Source</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Ground elevation</td><td>SRTM, via AWS Terrain Tiles (Terrarium encoding)</td><td><span class="chip chip--real">Real</span></td></tr>
+    <tr><td>Area boundaries</td><td>Panchayat / district boundary files in <code>data/raw/boundaries</code></td><td><span class="chip chip--real">Real</span></td></tr>
+    <tr><td>Relief facilities</td><td>Named shelters, hospitals and rescue bases in <code>data/raw/infrastructure</code></td><td><span class="chip chip--real">Real locations</span></td></tr>
+    <tr><td>Residents per cell</td><td>District census density spread around named settlements</td><td><span class="chip chip--model">Modelled</span></td></tr>
+    <tr><td>Rainfall</td><td>Steady 24&nbsp;h storm, 200&nbsp;mm</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
+    <tr><td>River inflows</td><td>Unit-hydrograph response to the synthetic rain</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
+    <tr><td>Embankments, breach and landslide timing</td><td>Rule-based, computed during the run</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="areas">
+<h2><span class="n">2</span>Study areas</h2>
+<p>Each model domain is the area's bounding box plus a 35&nbsp;% margin, so that water from
+outside the boundary (hillsides, upstream plains) can flow in. Results are only reported for
+cells inside the boundary.</p>
+<table class="tbl">
+  <thead><tr><th>Area</th><th class="r">Inside boundary</th><th class="r">Model domain</th><th class="r">Cell size</th><th class="r">Grid</th><th>Elevation</th><th>Flood mechanism</th></tr></thead>
+  <tbody>
+    <tr><td>Meppadi, Wayanad</td><td class="r">135 km²</td><td class="r">362 km²</td><td class="r">100 m</td><td class="r">170 × 213</td><td>205–2,200 m</td><td>Flash flood, debris flow</td></tr>
+    <tr><td>Darbhanga, Bihar</td><td class="r">2,595 km²</td><td class="r">6,954 km²</td><td class="r">320 m</td><td class="r">250 × 272</td><td>40–62 m</td><td>Embankment breach, drainage congestion</td></tr>
+    <tr><td>Dhemaji, Assam</td><td class="r">2,561 km²</td><td class="r">9,377 km²</td><td class="r">400 m</td><td class="r">337 × 174</td><td>91–1,064 m</td><td>Flash tributaries, Brahmaputra backwater</td></tr>
+  </tbody>
+</table>
+<p class="note">Cell sizes were chosen so that each run takes well under a minute in a browser.
+Meppadi's steep, narrow valleys need the finer grid; on the plains a 320–400&nbsp;m cell still
+resolves the main rivers and embankments.</p>
+</section>
+
+<section id="terrain">
+<h2><span class="n">3</span>Terrain preparation</h2>
+<p>Terrain is prepared once, offline, by <code>scripts/build_sim_terrain.py</code> and stored as
+<code>data/sim/&lt;area&gt;_terrain.json</code>. The steps are:</p>
+<ol class="steps">
+  <li><b>Sample the DEM.</b> Terrarium tiles are read at zoom 12 (Meppadi) or 11 (the plains) and
+    resampled to the model grid.</li>
+  <li><b>Smooth.</b> A light Gaussian filter (σ = 0.7–1.0 cells) removes SRTM speckle, which
+    otherwise creates false pools on flat ground.</li>
+  <li><b>Fill pits.</b> A priority-flood fill (Barnes et al. 2014) removes enclosed depressions
+    that are artefacts of the DEM. Only shallow pits are filled on the plains (up to 1&nbsp;m),
+    so real low-lying basins stay; deep pits in the Dhemaji hills are filled fully.</li>
+  <li><b>Flow accumulation.</b> D8 flow directions (O'Callaghan &amp; Mark 1984) give the
+    upstream drainage area of every cell. The model uses it to find rivers entering each domain,
+    trace their course, and set channel roughness.</li>
+  <li><b>Boundary mask.</b> The area boundary is rasterised onto the grid.</li>
+</ol>
+<p>Slope is computed from the smoothed surface. Height above the nearest drainage line
+(HAND; Rennó et al. 2008) is computed in the browser by a distance transform that carries the
+elevation of the nearest stream cell; it drives the terrain class shown on each grid hexagon.</p>
+</section>
+
+<section id="model">
+<h2><span class="n">4</span>Flow model</h2>
+<p>The solver (<code>js/flood-sim-solver.js</code>) uses the local-inertial form of the
+shallow-water equations, the scheme used in LISFLOOD-FP (Bates et al. 2010) with the
+stability treatment of de Almeida et al. (2012). Water depth <i>h</i> is stored at cell centres
+and unit discharge <i>q</i> (m²/s) on the faces between cells. For each face, each step:</p>
+<div class="eq">$$q^{t+\Delta t} = \frac{q^{t} - g\,h_f\,\Delta t\;\dfrac{\partial \eta}{\partial x}}{1 + g\,\Delta t\,n^2\,|q^{t}|\,/\,h_f^{7/3}}$$</div>
+<p>where η is the water surface elevation, <i>h<sub>f</sub></i> the flow depth at the face and
+<i>n</i> Manning's roughness. Depth in each cell is then updated from the net inflow and the
+local sources and sinks:</p>
+<div class="eq">$$h^{t+\Delta t} = h^{t} + \Delta t\left(\frac{\sum q_\text{in} - \sum q_\text{out}}{\Delta x} + r - f - d\right)$$</div>
+<p>with rain <i>r</i>, infiltration <i>f</i> and urban drainage <i>d</i>. Three safeguards keep
+the explicit scheme stable on 30° slopes and 7&nbsp;m-deep rivers alike:</p>
+<ul>
+  <li>the time step follows the wave-speed limit, $\Delta t = \min(30\,\text{s},\; 0.7\,\Delta x/\sqrt{g\,h_\text{max}})$;</li>
+  <li>discharge is capped at a Froude number of 1, $|q| \le h_f\sqrt{g\,h_f}$;</li>
+  <li>a cell can never lose more water in a step than it holds (positivity limiter).</li>
+</ul>
+<p><b>Infiltration</b> follows a Horton-type decay with the depth already infiltrated,
+$f = \left[f_c + (f_0 - f_c)\,e^{-F/F_k}\right]\cdot m$, where <i>m</i> lowers infiltration on
+river channels, steep thin-soiled hillsides and sealed town centres.
+<b>Roughness</b> rises from the base land value by up to 0.05 on steep hillsides (forest and
+plantation), falls to the channel value along rivers, and rises to 0.09 in built-up areas.
+A passive tracer carries sediment concentration, so debris and silt-laden river water can be
+told apart from ponded rain on the map.</p>
+
+<table class="tbl">
+  <caption>Surface parameters by area</caption>
+  <thead><tr><th>Parameter</th><th class="r">Meppadi</th><th class="r">Darbhanga</th><th class="r">Dhemaji</th></tr></thead>
+  <tbody>
+    <tr><td>Manning <i>n</i>, land (s/m<sup>1/3</sup>)</td><td class="r">0.07</td><td class="r">0.05</td><td class="r">0.045</td></tr>
+    <tr><td>Manning <i>n</i>, channels</td><td class="r">0.04</td><td class="r">0.033</td><td class="r">0.03</td></tr>
+    <tr><td>Initial infiltration <i>f</i><sub>0</sub> (mm/h)</td><td class="r">16</td><td class="r">10</td><td class="r">20</td></tr>
+    <tr><td>Final infiltration <i>f<sub>c</sub></i> (mm/h)</td><td class="r">3.5</td><td class="r">2</td><td class="r">5</td></tr>
+    <tr><td>Decay depth <i>F<sub>k</sub></i> (mm)</td><td class="r">35</td><td class="r">25</td><td class="r">40</td></tr>
+    <tr><td>Town drainage capacity (mm/h)</td><td class="r">8</td><td class="r">14 / 12</td><td class="r">8</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="forcing">
+<h2><span class="n">5</span>Rain and river inflows</h2>
+<h3>Rain</h3>
+<p>Rain starts at T+0 and falls without a break for 24 hours. The rate is almost constant: a
+15-minute ramp-in, then a few per cent of natural variation, scaled so the 24-hour total is
+exactly the storm total <i>P</i> (200&nbsp;mm):</p>
+<div class="eq">$$R(t) = k\left[1 + 0.04\sin\!\left(\tfrac{2\pi t}{3.7\,\text{h}}\right) + 0.025\sin\!\left(\tfrac{2\pi t}{1.3\,\text{h}} + 1\right)\right],\qquad \int_0^{24\,\text{h}} R\,dt = P$$</div>
+<p>That is about 8&nbsp;mm/h. Because nothing lets up, water keeps building and the worst
+state is at the end of the day. Rain is spread over each area with a weight
+<i>w</i>(<i>x</i>): on the Ghats and the Arunachal foothills it increases with elevation
+(orographic lift), and everywhere a smooth random field adds ±20&nbsp;% so it is not uniform.
+The dashboard raises alerts when the running total passes the India Meteorological Department's
+24-hour categories: heavy (64.5&nbsp;mm) and very heavy (115.6&nbsp;mm).</p>
+
+<h3>River inflows</h3>
+<p>Rivers entering a domain are found where large drainage areas cross its edge. Their flow is
+a triangular unit hydrograph convolved with the rain over their catchment:</p>
+<div class="eq">$$Q(t) = Q_b + G\,\frac{\sum_\tau R(t-\tau)\,u(\tau)}{\sum_\tau u(\tau)}$$</div>
+<p>where <i>u</i> rises linearly over the lag time and falls over the base time, <i>Q<sub>b</sub></i>
+is the base flow and the gain <i>G</i> scales with catchment area. The Brahmaputra is not
+rain-driven in the model; its inflow on Dhemaji's eastern edge rises smoothly from 16,000 to
+32,000&nbsp;m³/s through the day.</p>
+</section>
+
+<section id="scenarios">
+<h2><span class="n">6</span>The three scenarios</h2>
+
+<h3>Meppadi: flash flood and debris flow</h3>
+<p>Steep, rain-fed streams on the Western Ghats respond within an hour or two. The question is
+whether the valley head above Punchirimattam (the 2024 initiation zone) fails. Slope stability
+uses the infinite-slope factor of safety (Skempton &amp; DeLory 1957), with the soil's
+saturation <i>m</i> rising with the rain that has fallen on the slope:</p>
+<div class="eq">$$FS = \frac{c' + (\gamma - m\,\gamma_w)\,z\cos^2\!\beta\,\tan\phi'}{\gamma\,z\,\sin\beta\cos\beta},\qquad m = \min\!\left(1,\;\frac{w\,P_\text{cum}}{170\ \text{mm}}\right)$$</div>
+<p>with cohesion <i>c'</i> = 9&nbsp;kPa, friction angle φ' = 34°, soil depth <i>z</i> = 2.5&nbsp;m,
+soil unit weight γ = 19&nbsp;kN/m³ and γ<sub>w</sub> = 9.81&nbsp;kN/m³. When <i>FS</i> drops
+below 1 on the steepest cell of the source area, a debris pulse (about 1.9&nbsp;million&nbsp;m³ at
+200&nbsp;mm) is released over 15 minutes and routed by the flow model down the Punnapuzha
+through Mundakkai and Chooralmala. In the current storm this happens at T+13.1&nbsp;h. The map's
+hatched slopes are cells steeper than 26° that fail when saturated.</p>
+
+<figure class="fig" id="fsFigure">
+  <figcaption><b>Figure 1.</b> Factor of safety against slope angle, from the same function
+  the model uses. Wet soil loses about a third of its strength; below <i>FS</i> = 1 the slope
+  fails. Saturated slopes steeper than about 30° are unstable.</figcaption>
+  <div class="legend">
+    <span><i style="background:#4a97c4"></i>Dry soil (m = 0)</span>
+    <span><i style="background:#d0782a"></i>Saturated soil (m = 1)</span>
   </div>
-</nav>
+  <div class="chart" id="fsChart" role="img" aria-label="Factor of safety falls with slope angle; the saturated curve crosses 1 at about 30 degrees, the dry curve at about 48 degrees."></div>
+  <details class="fig__table"><summary>Show values</summary><div id="fsTable"></div></details>
+</figure>
 
-<!-- Progress Bar -->
-<div class="scroll-progress"><div class="scroll-progress-fill" id="scrollProgress"></div></div>
+<h3>Darbhanga: embankment breaches and drainage congestion</h3>
+<p>Floods here come down the embanked rivers from the Nepal side. The four largest rivers
+entering on the north and west edges are traced downstream. Each gets a channel carved 2&nbsp;m
+into the plain, starts 2&nbsp;m deep, and is lined on both banks by embankments 3.6&nbsp;m high.
+Their catchments extend well beyond the domain (taken as six times the drainage area at the
+edge) and respond with a lag of 3–4&nbsp;h.</p>
+<p>Every river crossing the district has one breach site, on its weakest (lowest) bank; on the
+river nearest Darbhanga town it is the weakest bank just upstream of the town. The solver
+watches the water level there. After an hour above Danger Level (1.3&nbsp;m above bank level,
+or, at the town site, 1.2&nbsp;m above the river's own level at T+0), the embankment cells are
+lowered and the flow model carries water through the gap. With 200&nbsp;mm of rain the three
+embankments fail at T+5.6, T+8.6 and T+12.7&nbsp;h. At T+6&nbsp;h the town outfall sluices close
+because the rivers are above them, and town drainage falls to 20&nbsp;% of capacity; rain trapped
+between embankments then ponds across the plain.</p>
 
-<!-- Tabs -->
-<div class="tab-nav" id="tabNav">
-  <button class="tab-btn active" data-tab="pipeline"><span class="tab-icon">⚙</span> Pipeline</button>
-  <button class="tab-btn" data-tab="visualizations"><span class="tab-icon">📊</span> Algorithm Viz</button>
-  <button class="tab-btn" data-tab="datasources"><span class="tab-icon">🛰</span> Data Sources</button>
-  <button class="tab-btn" data-tab="regions"><span class="tab-icon">🗺</span> Coverage Regions</button>
-  <button class="tab-btn" data-tab="metrics"><span class="tab-icon">🎯</span> Scores &amp; Metrics</button>
-</div>
+<h3>Dhemaji: flash tributaries and backwater</h3>
+<p>Six north-bank rivers (the Jiadhal and its neighbours) come off the Arunachal foothills with
+short lags (1.8–2.6&nbsp;h) and carry sand and silt. On a 400&nbsp;m grid the gorges above the
+foothills cannot be resolved, so each river is injected where it reaches the plain. Meanwhile
+the rising Brahmaputra on the southern and eastern side drowns their outfalls, so water spreads
+as wide, shallow sheets rather than draining away.</p>
+</section>
 
-<div class="container">
+<section id="risk">
+<h2><span class="n">7</span>From water depth to risk</h2>
+<p><b>Floodwater is water above the level at T+0.</b> Rivers already flowing in their banks and
+permanent water bodies are not flooding, so every figure on the dashboard (inundated area, water
+accumulated, people in water, grid colours) uses the depth above that starting level. That is
+why every grid cell is green before the simulation runs.</p>
+<table class="tbl">
+  <caption>Thresholds used for people</caption>
+  <thead><tr><th>Measure</th><th>Rule</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Inundated</td><td>depth &gt; 0.15&nbsp;m</td><td>ankle-deep: roads and fields visibly under water</td></tr>
+    <tr><td>People in water</td><td>depth &gt; 0.30&nbsp;m</td><td>knee-deep: walking becomes difficult and cars stall</td></tr>
+    <tr><td>At risk to life</td><td>depth &gt; 1.5&nbsp;m, or depth × speed &gt; 1&nbsp;m²/s</td><td>adults lose footing in fast flow (Jonkman &amp; Penning-Rowsell 2008)</td></tr>
+  </tbody>
+</table>
+<p>Residents per cell come from the dashboard's density model: district census density,
+concentrated around named settlements. River-channel cells keep a quarter of that density,
+since people live on banks, embankments and river islands but not in the channel itself.</p>
 
-<!-- Hero Section -->
-<div class="hero-section fade-in">
-  <div class="hero-badge">HYDROLOGICAL INTELLIGENCE FRAMEWORK v1.0</div>
-  <h1 class="hero-title">End-to-End Flood<br><span class="gradient-text">Prediction Pipeline</span></h1>
-  <p class="hero-desc">From raw DEM terrain data through physics-based hydrological modelling, XGBoost ML classification, to real-time tactical mission control — every step grounded in peer-reviewed hydrology.</p>
-  <div class="hero-stats">
-    <div class="hero-stat"><span class="hs-val" data-count="6">0</span><span class="hs-label">Pipeline Phases</span></div>
-    <div class="hero-stat"><span class="hs-val" data-count="16">0</span><span class="hs-label">Processing Nodes</span></div>
-    <div class="hero-stat"><span class="hs-val" data-count="8">0</span><span class="hs-label">ML Features</span></div>
-    <div class="hero-stat"><span class="hs-val" data-count="14">0</span><span class="hs-label">Data Sources</span></div>
-  </div>
-</div>
+<h3>Risk grid</h3>
+<p>Each area is divided into about 220 hexagons of equal size (IDs like <code>DBG-F12</code>, row A
+northernmost). Before the run, a hexagon shows its residents and terrain: elevation range, mean
+slope, height above the nearest river, distance to that river and a terrain class. As the
+simulation runs, each hexagon is classed by how much of it is under water and how many of its
+residents are in water. The classes are relative to the hexagon, so a large, sparsely populated
+hexagon is not rated severe for a small pond.</p>
+<table class="tbl">
+  <thead><tr><th>Class</th><th>Rule (first that applies)</th></tr></thead>
+  <tbody>
+    <tr><td><span class="sw" style="background:#7a0c12"></span>Severe</td><td>max depth ≥ 2&nbsp;m over ≥ 35&nbsp;% of the land, or ≥ 12&nbsp;% of residents at risk to life</td></tr>
+    <tr><td><span class="sw" style="background:#e0352b"></span>High</td><td>max depth ≥ 1&nbsp;m over ≥ 20&nbsp;%, or ≥ 50&nbsp;% flooded, or ≥ 25&nbsp;% of residents in water</td></tr>
+    <tr><td><span class="sw" style="background:#f2c12e"></span>Moderate</td><td>max depth ≥ 0.5&nbsp;m over ≥ 5&nbsp;%, or ≥ 12&nbsp;% flooded, or ≥ 6&nbsp;% of residents in water</td></tr>
+    <tr><td><span class="sw" style="background:#56b84f"></span>Low</td><td>more than 2&nbsp;% flooded</td></tr>
+    <tr><td><span class="sw" style="background:#2f9e57"></span>Safe</td><td>otherwise</td></tr>
+  </tbody>
+</table>
+<p>In Darbhanga, where the rivers themselves are the main hazard, a hexagon that a river runs
+through is also rated by how far that river has risen: at least moderate at 0.4&nbsp;m, high at
+1&nbsp;m and severe at 2&nbsp;m above its T+0 level.</p>
+</section>
 
-<!-- TAB 1: Pipeline -->
-<div class="tab-view active" id="tab-pipeline">
-  <div id="pipeline-detail"></div>
-  <div class="pipeline-wrap" id="pipeline-wrap"></div>
-</div>
+<section id="display">
+<h2><span class="n">8</span>What the map shows</h2>
+<p>The water surface is drawn from the model's depth field, blended between the two snapshots
+either side of the clock time, and draped over the 3D terrain. Colour follows depth (thin sheets
+are pale and translucent, deep water darker) and turns brown where the sediment tracer is high.
+Thin runoff sheets on steep hillsides are hidden, because they are not flooding. Flow arrows
+follow the model's velocity field, and a faint silt stain marks ground that was flooded and has
+since drained. The gauge chart reads the same snapshots at one river cell, so it always agrees
+with the map.</p>
+</section>
 
-<!-- TAB 2: Algorithm Visualizations -->
-<div class="tab-view" id="tab-visualizations">
-  <!-- D8 vs D-Infinity -->
-  <div class="viz-section fade-in">
-    <div class="section-header">
-      <div class="section-num">01</div>
-      <div><div class="viz-title">D8 vs D-Infinity Flow Direction</div>
-      <div class="viz-subtitle">Comparing single-direction and proportional flow routing algorithms</div></div>
-    </div>
-    <div class="equation-block">
-      <div class="eq-label">D-Infinity (Tarboton, 1997)</div>
-      <div class="katex-eq">$$\alpha = \arctan\!\left(\frac{\partial z / \partial y}{\partial z / \partial x}\right), \quad f_1 = \frac{\alpha_1 - \alpha}{\alpha_1 - \alpha_2}, \quad f_2 = 1 - f_1$$</div>
-      <div class="eq-note">Flow is partitioned between two steepest-descent neighbors proportionally to angular deviation α from facet edges.</div>
-    </div>
-    <div class="viz-grid-row">
-      <div class="viz-canvas-wrap glass-card">
-        <h4>D8 — Single Direction <span class="tag-inline red">Limited</span></h4>
-        <canvas id="d8Canvas" width="420" height="420"></canvas>
-        <div class="viz-caption"><strong>⚠ Limitation:</strong> Each cell routes ALL water to ONE steepest neighbor. Creates unnatural straight-line channels, especially on flat terrain (slope &lt;0.1°).</div>
-      </div>
-      <div class="viz-canvas-wrap glass-card">
-        <h4>D-Infinity — Proportional Split <span class="tag-inline green">Preferred</span></h4>
-        <canvas id="dinfCanvas" width="420" height="420"></canvas>
-        <div class="viz-caption"><strong>✓ Advantage:</strong> Water splits proportionally between two steepest neighbors. Reduces flow concentration errors by ~40% on flat Darbhanga plains.</div>
-      </div>
-    </div>
-  </div>
+<section id="checks">
+<h2><span class="n">9</span>Checks and run times</h2>
+<p><b>Mass balance.</b> At the end of every run the solver reports rain, inflow, infiltration,
+drainage, boundary outflow and stored water. The balance closes to better than 0.001&nbsp;% in all
+three areas.</p>
+<p><b>Results at 200&nbsp;mm.</b></p>
+<table class="tbl">
+  <thead><tr><th>Area</th><th class="r">Water accumulated, T+24&nbsp;h</th><th class="r">Inundated</th><th class="r">Key event</th><th class="r">Run time</th></tr></thead>
+  <tbody>
+    <tr><td>Meppadi</td><td class="r">4.6 million m³</td><td class="r">7.6 km²</td><td class="r">slope failure T+13.1&nbsp;h</td><td class="r">≈ 33&nbsp;s</td></tr>
+    <tr><td>Darbhanga</td><td class="r">395 million m³</td><td class="r">582 km²</td><td class="r">town-side breach T+12.7&nbsp;h</td><td class="r">≈ 47&nbsp;s</td></tr>
+    <tr><td>Dhemaji</td><td class="r">504 million m³</td><td class="r">573 km²</td><td class="r">flash surges from T+3.7&nbsp;h</td><td class="r">≈ 33&nbsp;s</td></tr>
+  </tbody>
+</table>
+<p class="note">Run times are for a single CPU thread. The solver runs in a Web Worker and sends
+snapshots as it goes, so playback can start before the run finishes.</p>
+</section>
 
-  <!-- TWI + SCS-CN -->
-  <div class="viz-section fade-in">
-    <div class="section-header">
-      <div class="section-num">02</div>
-      <div><div class="viz-title">TWI & SCS Curve Number</div>
-      <div class="viz-subtitle">Terrain wetness indexing and rainfall-runoff conversion</div></div>
-    </div>
-    <div class="equation-block dual">
-      <div class="eq-col">
-        <div class="eq-label">Topographic Wetness Index (Beven & Kirkby, 1979)</div>
-        <div class="katex-eq">$$\text{TWI} = \ln\!\left(\frac{a}{\tan \beta}\right)$$</div>
-        <div class="eq-note">where <em>a</em> = specific upslope contributing area (m²/m) and <em>β</em> = local slope angle. TWI &gt; 10 → high waterlogging risk.</div>
-      </div>
-      <div class="eq-col">
-        <div class="eq-label">SCS Curve Number Method (USDA, 1986)</div>
-        <div class="katex-eq">$$Q = \frac{(P - I_a)^2}{P - I_a + S}, \quad S = \frac{25400}{\text{CN}} - 254, \quad I_a = 0.2\,S$$</div>
-        <div class="eq-note">All units in mm. CN is dimensionless (55–98). AMC III (saturated): CN<sub>III</sub> ≈ CN<sub>II</sub> × 1.20.</div>
-      </div>
-    </div>
-    <div class="viz-grid-row">
-      <div class="viz-canvas-wrap glass-card">
-        <h4>TWI Heatmap — Flood Susceptibility</h4>
-        <canvas id="twiCanvas" width="420" height="320"></canvas>
-        <div class="viz-caption"><span style="color:#ff4444">■</span> High TWI (red) = flat valleys, water accumulation zones. <span style="color:#4488ff">■</span> Low TWI (blue) = steep ridges, rapid drainage.</div>
-      </div>
-      <div class="viz-canvas-wrap glass-card">
-        <h4>SCS-CN Runoff Curves by Land Use</h4>
-        <canvas id="scsCnCanvas" width="420" height="320"></canvas>
-        <div class="viz-caption">Urban (CN 90) generates ~17× more runoff than dense forest (CN 55) at 200mm rainfall. AMC III shifts all curves upward dramatically.</div>
-      </div>
-    </div>
-  </div>
+<section id="limits">
+<h2><span class="n">10</span>Limitations</h2>
+<ul>
+  <li><b>The forcing is synthetic.</b> Rain, river inflows and failure timings are plausible but
+    invented. The results show how each area responds to a storm of this kind, not a forecast of
+    a real event.</li>
+  <li><b>Not yet validated.</b> The model has not been compared with observed flood extents, so
+    its accuracy is unknown. It should not be used for real decisions until it has been.</li>
+  <li><b>SRTM is coarse on flat ground.</b> Its vertical error (several metres) is comparable to
+    the relief of the Bihar plain. Embankments and road levels are not in the DEM; the modelled
+    embankments are idealised.</li>
+  <li><b>Grid resolution.</b> At 320–400&nbsp;m, streets, buildings, culverts and small channels are
+    not resolved. Town drainage is a uniform sink, not a pipe network.</li>
+  <li><b>Population is modelled.</b> Residents per cell are an estimate from census density, not a
+    count. Exposure figures are indicative.</li>
+  <li><b>Risk classes are rules, not a trained model.</b> The thresholds are set by judgement and
+    have not been calibrated against damage or casualty data.</li>
+</ul>
+</section>
 
-  <!-- XGBoost + Manning's -->
-  <div class="viz-section fade-in">
-    <div class="section-header">
-      <div class="section-num">03</div>
-      <div><div class="viz-title">XGBoost Risk Model & Manning's Equation</div>
-      <div class="viz-subtitle">Machine learning classification and open-channel flow velocity</div></div>
-    </div>
-    <div class="equation-block dual">
-      <div class="eq-col">
-        <div class="eq-label">XGBoost Objective (multi:softprob)</div>
-        <div class="katex-eq">$$\hat{y}_i = \sum_{k=1}^{K} f_k(x_i), \quad \mathcal{L} = \sum_i l(y_i, \hat{y}_i) + \sum_k \Omega(f_k)$$</div>
-        <div class="eq-note">K = 300 trees, max_depth = 8. Output: predict_proba() for 4 risk classes (Low, Medium, High, Extreme).</div>
-      </div>
-      <div class="eq-col">
-        <div class="eq-label">Manning's Equation (SI Units)</div>
-        <div class="katex-eq">$$V = \frac{1}{n} \cdot R_h^{2/3} \cdot S_f^{1/2}$$</div>
-        <div class="eq-note">V = velocity (m/s), n = roughness coeff., R<sub>h</sub> = hydraulic radius (m), S<sub>f</sub> = friction slope. SI coefficient = 1.0 (NOT 1.486 imperial).</div>
-      </div>
-    </div>
-    <div class="viz-grid-row">
-      <div class="viz-canvas-wrap glass-card">
-        <h4>Feature Importance — 300 Trees, 8 Features</h4>
-        <canvas id="xgbCanvas" width="420" height="300"></canvas>
-        <div class="viz-caption">Rainfall (28.6%) is dominant, but hydrological context (River Dist + Flow Acc = 39.1%) surpasses raw precipitation alone.</div>
-      </div>
-      <div class="viz-canvas-wrap glass-card">
-        <h4>Manning's Velocity by Surface Type</h4>
-        <canvas id="manningCanvas" width="420" height="300"></canvas>
-        <div class="viz-caption">At R<sub>h</sub>=1.0m, S=1%: Concrete channel (n=0.012) flows at 8.3 m/s vs Dense Forest (n=0.100) at 1.0 m/s — an 8× speed difference.</div>
-      </div>
-    </div>
-  </div>
+<section id="next">
+<h2><span class="n">11</span>Towards an operational system</h2>
+<p>None of the following is built; it is what would replace each synthetic part.</p>
+<table class="tbl">
+  <thead><tr><th>Part</th><th>Now</th><th>Operational</th></tr></thead>
+  <tbody>
+    <tr><td>Rain</td><td>Synthetic 24&nbsp;h storm</td><td>IMD gridded forecasts and radar nowcasts, GPM IMERG for recent rain</td></tr>
+    <tr><td>Rivers</td><td>Unit hydrograph on synthetic rain</td><td>CWC gauge levels and forecasts at the domain edges</td></tr>
+    <tr><td>Terrain</td><td>SRTM 30&nbsp;m</td><td>Cartosat-1 or ALOS DEMs, surveyed embankment crests</td></tr>
+    <tr><td>Population</td><td>Density model</td><td>WorldPop or census-block counts, updated building footprints</td></tr>
+    <tr><td>Validation</td><td>Mass balance only</td><td>Past events against Sentinel-1 flood maps (hit rate, false alarms)</td></tr>
+    <tr><td>Compute</td><td>Browser Web Worker</td><td>Server-side GPU runs on a schedule, results streamed as tiles</td></tr>
+  </tbody>
+</table>
+</section>
 
-  <!-- Additional Equations Reference -->
-  <div class="viz-section fade-in">
-    <div class="section-header">
-      <div class="section-num">04</div>
-      <div><div class="viz-title">Additional Key Equations</div>
-      <div class="viz-subtitle">Hydrograph generation, flood routing, and dam-break analysis</div></div>
-    </div>
-    <div class="equations-grid">
-      <div class="eq-card glass-card">
-        <div class="eq-card-title">SCS Dimensionless Unit Hydrograph</div>
-        <div class="katex-eq">$$T_p = \frac{D}{2} + 0.6\,T_c, \quad Q_p = \frac{2.08\,A}{T_p}$$</div>
-        <div class="eq-note">T<sub>p</sub> = time to peak (hr), A = basin area (km²), D = storm duration (hr), T<sub>c</sub> = time of concentration. Q<sub>p</sub> in m³/s.</div>
-      </div>
-      <div class="eq-card glass-card">
-        <div class="eq-card-title">Flood Hydrograph Convolution</div>
-        <div class="katex-eq">$$Q(t) = \sum_{\tau=0}^{t} P_{\text{eff}}(\tau) \cdot UH(t - \tau)\,\Delta\tau$$</div>
-        <div class="eq-note">Effective rainfall convolved with unit hydrograph across P50/P75/P90 IMD quantile scenarios for T+0 to T+72hr.</div>
-      </div>
-      <div class="eq-card glass-card">
-        <div class="eq-card-title">Muskingum-Cunge Routing</div>
-        <div class="katex-eq">$$K = \frac{\Delta x}{c}, \quad X = \frac{1}{2}\left[1 - \frac{Q}{B\,S_0\,c\,\Delta x}\right]$$</div>
-        <div class="eq-note">Geometry-derived K and X (no gauge calibration). Courant condition: C = V·Δt/Δx ≤ 1 is strictly enforced with auto sub-timestep.</div>
-      </div>
-      <div class="eq-card glass-card">
-        <div class="eq-card-title">Ritter Dam-Break Wave</div>
-        <div class="katex-eq">$$V_{\text{wave}} = 2\sqrt{g\,h_0}$$</div>
-        <div class="eq-note">Used when breach probability &gt; 60%. h₀ = water depth behind dam (m), g = 9.81 m/s². All downstream cells → EXTREME risk.</div>
-      </div>
-    </div>
-  </div>
-</div>
+<section id="refs">
+<h2><span class="n">12</span>References</h2>
+<ol class="refs">
+  <li>Barnes, R., Lehman, C., Mulla, D. (2014). Priority-flood: an optimal depression-filling and watershed-labeling algorithm for digital elevation models. <i>Computers &amp; Geosciences</i> 62, 117–127.</li>
+  <li>Bates, P.D., Horritt, M.S., Fewtrell, T.J. (2010). A simple inertial formulation of the shallow water equations for efficient two-dimensional flood inundation modelling. <i>Journal of Hydrology</i> 387, 33–45.</li>
+  <li>de Almeida, G.A.M., Bates, P., Freer, J.E., Souvignet, M. (2012). Improving the stability of a simple formulation of the shallow water equations for 2-D flood modeling. <i>Water Resources Research</i> 48, W05528.</li>
+  <li>Horton, R.E. (1933). The role of infiltration in the hydrologic cycle. <i>Transactions, American Geophysical Union</i> 14, 446–460.</li>
+  <li>Jonkman, S.N., Penning-Rowsell, E. (2008). Human instability in flood flows. <i>Journal of the American Water Resources Association</i> 44(5), 1208–1218.</li>
+  <li>O'Callaghan, J.F., Mark, D.M. (1984). The extraction of drainage networks from digital elevation data. <i>Computer Vision, Graphics, and Image Processing</i> 28, 323–344.</li>
+  <li>Rennó, C.D. et al. (2008). HAND, a new terrain descriptor using SRTM-DEM: mapping terra-firme rainforest environments in Amazonia. <i>Remote Sensing of Environment</i> 112, 3469–3481.</li>
+  <li>Skempton, A.W., DeLory, F.A. (1957). Stability of natural slopes in London Clay. <i>Proc. 4th International Conference on Soil Mechanics and Foundation Engineering</i>, vol. 2, 378–381.</li>
+</ol>
+<p class="note">Source files: <code>scripts/build_sim_terrain.py</code>, <code>js/flood-scenarios.js</code>,
+<code>js/flood-sim-solver.js</code>, <code>js/flood-sim.js</code>, <code>js/flood-grid.js</code>,
+<code>js/flood-render.js</code>. A longer write-up is in <code>docs/FLOOD_SIMULATION.md</code>.</p>
+</section>
 
-<!-- TAB 3: Data Sources -->
-<div class="tab-view" id="tab-datasources">
-  <div id="ds-detail-container"></div>
-  <div id="ds-cats"></div>
-</div>
-
-<!-- TAB 4: Coverage Regions -->
-<div class="tab-view" id="tab-regions">
-  <div class="regions-grid">
-    <div class="region-card glass-card rc-kerala fade-in">
-      <div class="region-accent kerala"></div>
-      <div class="region-header">
-        <div><div class="region-name">Meppadi</div><div class="region-district">Wayanad District, Kerala</div></div>
-        <div class="region-risk-badge extreme">EXTREME</div>
-      </div>
-      <div class="region-stats">
-        <div class="region-stat"><span class="rs-icon">🌊</span><span class="rs-label">Flood Type</span><span class="rs-val" style="color:#00c8ff">Flash Flood + Landslide</span></div>
-        <div class="region-stat"><span class="rs-icon">⛰</span><span class="rs-label">Terrain</span><span class="rs-val">High-altitude, 700–2100m ASL</span></div>
-        <div class="region-stat"><span class="rs-icon">📡</span><span class="rs-label">DEM Source</span><span class="rs-val" style="color:#00c8ff">ALOS PALSAR 12.5m</span></div>
-        <div class="region-stat"><span class="rs-icon">📐</span><span class="rs-label">Avg Slope</span><span class="rs-val">18–35°</span></div>
-        <div class="region-stat"><span class="rs-icon">🌧</span><span class="rs-label">Avg Annual Rainfall</span><span class="rs-val">2500–3500 mm</span></div>
-        <div class="region-stat"><span class="rs-icon">⚠</span><span class="rs-label">Key Risk Event</span><span class="rs-val" style="color:#ffaa00">2018 Kerala Floods (483 deaths)</span></div>
-      </div>
-      <div class="risk-bar"><div class="risk-fill" style="--w:88%;background:linear-gradient(90deg,#00c8ff,#ff3b3b)"></div></div>
-      <div class="risk-label">Composite Risk Index: <strong>88/100</strong></div>
-      <div class="challenge-list">
-        <div class="section-label">TERRAIN CHALLENGES</div>
-        <div class="challenge-item">D8 fails on steep terrain — D-Infinity mandatory</div>
-        <div class="challenge-item">Cloud cover creates voids in ALOS DEM during monsoon</div>
-        <div class="challenge-item">Banasura Sagar dam upstream — reservoir override critical</div>
-        <div class="challenge-item">Flash flood time of concentration (T<sub>c</sub>) as low as 45 minutes</div>
-        <div class="challenge-item">Laterite soil: rapid saturation (AMC II→III in &lt;6hrs)</div>
-      </div>
-    </div>
-    <div class="region-card glass-card rc-bihar fade-in">
-      <div class="region-accent bihar"></div>
-      <div class="region-header">
-        <div><div class="region-name">Darbhanga</div><div class="region-district">Darbhanga District, Bihar</div></div>
-        <div class="region-risk-badge high">HIGH</div>
-      </div>
-      <div class="region-stats">
-        <div class="region-stat"><span class="rs-icon">🌊</span><span class="rs-label">Flood Type</span><span class="rs-val" style="color:#ffaa00">Riverine + Embankment Breach</span></div>
-        <div class="region-stat"><span class="rs-icon">⛰</span><span class="rs-label">Terrain</span><span class="rs-val">Flat alluvial plain, 40–55m ASL</span></div>
-        <div class="region-stat"><span class="rs-icon">📡</span><span class="rs-label">DEM Source</span><span class="rs-val" style="color:#00c8ff">Cartosat-1 10m</span></div>
-        <div class="region-stat"><span class="rs-icon">📐</span><span class="rs-label">Avg Slope</span><span class="rs-val">&lt;0.1° (critically flat)</span></div>
-        <div class="region-stat"><span class="rs-icon">🌧</span><span class="rs-label">Avg Annual Rainfall</span><span class="rs-val">1100–1300 mm</span></div>
-        <div class="region-stat"><span class="rs-icon">⚠</span><span class="rs-label">Key Risk Event</span><span class="rs-val" style="color:#ffaa00">2019 Bihar Floods (Bagmati breach)</span></div>
-      </div>
-      <div class="risk-bar"><div class="risk-fill" style="--w:82%;background:linear-gradient(90deg,#ffaa00,#ff3b3b)"></div></div>
-      <div class="risk-label">Composite Risk Index: <strong>82/100</strong></div>
-      <div class="challenge-list">
-        <div class="section-label">TERRAIN CHALLENGES</div>
-        <div class="challenge-item">Slope &lt;0.1° — D8 completely fails; bathtub inundation dominates</div>
-        <div class="challenge-item">Bagmati River embankment breach history (km-wide spread)</div>
-        <div class="challenge-item">Urban drainage failure not captured by TWI alone</div>
-        <div class="challenge-item">Cartosat 10m essential — SRTM 30m creates ±16m errors on flat terrain</div>
-        <div class="challenge-item">Alluvial soil high porosity delays but extends flooding duration</div>
-      </div>
-    </div>
-    <div class="region-card glass-card rc-assam fade-in">
-      <div class="region-accent assam"></div>
-      <div class="region-header">
-        <div><div class="region-name">Dhemaji</div><div class="region-district">Dhemaji District, Assam</div></div>
-        <div class="region-risk-badge extreme">EXTREME</div>
-      </div>
-      <div class="region-stats">
-        <div class="region-stat"><span class="rs-icon">🌊</span><span class="rs-label">Flood Type</span><span class="rs-val" style="color:#00e676">Braided River + Extreme Precipitation</span></div>
-        <div class="region-stat"><span class="rs-icon">⛰</span><span class="rs-label">Terrain</span><span class="rs-val">Brahmaputra floodplain, 90–120m ASL</span></div>
-        <div class="region-stat"><span class="rs-icon">📡</span><span class="rs-label">DEM Source</span><span class="rs-val" style="color:#00c8ff">Cartosat-1 10m</span></div>
-        <div class="region-stat"><span class="rs-icon">📐</span><span class="rs-label">Avg Slope</span><span class="rs-val">0.1–0.5°</span></div>
-        <div class="region-stat"><span class="rs-icon">🌧</span><span class="rs-label">Avg Annual Rainfall</span><span class="rs-val">2800–3200 mm</span></div>
-        <div class="region-stat"><span class="rs-icon">⚠</span><span class="rs-label">Key Risk Event</span><span class="rs-val" style="color:#ffaa00">2022 Assam Floods (700K displaced)</span></div>
-      </div>
-      <div class="risk-bar"><div class="risk-fill" style="--w:91%;background:linear-gradient(90deg,#00e676,#ff3b3b)"></div></div>
-      <div class="risk-label">Composite Risk Index: <strong>91/100</strong></div>
-      <div class="challenge-list">
-        <div class="section-label">TERRAIN CHALLENGES</div>
-        <div class="challenge-item">Braided channels shift seasonally — K &amp; X must be re-derived each season</div>
-        <div class="challenge-item">Subansiri dam upstream — largest hydropower project in NE India</div>
-        <div class="challenge-item">Wetland depressions must NOT be pit-filled (ε=0.001m preservation)</div>
-        <div class="challenge-item">Extreme precipitation events &gt;300mm/day increasing in frequency</div>
-        <div class="challenge-item">SMAP soil moisture saturates early — AMC III dominates June–September</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- TAB 5: Scores & Metrics -->
-<div class="tab-view" id="tab-metrics">
-  <div class="metrics-grid">
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="94"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#00c8ff" stroke-width="2.5" stroke-dasharray="94 6" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">94.2%</span></div><div class="metric-label">Model Accuracy</div><div class="metric-sub">XGBoost, 5-fold CV</div></div>
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="93"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#00e676" stroke-width="2.5" stroke-dasharray="93 7" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">0.938</span></div><div class="metric-label">F1 Score</div><div class="metric-sub">Balanced across 4 classes</div></div>
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="60"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#ffaa00" stroke-width="2.5" stroke-dasharray="60 40" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">0.6+</span></div><div class="metric-label">Target CSI</div><div class="metric-sub">WMO operational standard</div></div>
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="100"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#4488ff" stroke-width="2.5" stroke-dasharray="100 0" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">72hr</span></div><div class="metric-label">Forecast Window</div><div class="metric-sub">T+0 to T+72, 1hr steps</div></div>
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="100"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#00c8ff" stroke-width="2.5" stroke-dasharray="100 0" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">300</span></div><div class="metric-label">XGBoost Trees</div><div class="metric-sub">8-feature physics vector</div></div>
-    <div class="metric-card glass-card fade-in"><div class="metric-ring" data-pct="85"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/><circle cx="18" cy="18" r="16" fill="none" stroke="#ff3b3b" stroke-width="2.5" stroke-dasharray="85 15" stroke-dashoffset="25" stroke-linecap="round"/></svg><span class="ring-val">85%</span></div><div class="metric-label">Reservoir Trigger</div><div class="metric-sub">Override threshold (FRL)</div></div>
-  </div>
-
-  <div class="section-label" style="margin:28px 0 16px">PER-CLASS PERFORMANCE</div>
-  <div class="score-row">
-    <div class="score-item glass-card"><div class="score-name">Low Risk</div><div class="score-metrics"><span>P: 0.918</span><span>R: 0.905</span><span>F1: 0.911</span></div><div class="score-bar-wrap"><div class="score-bar" style="width:91.1%;background:linear-gradient(90deg,#10b981,#00c8ff)"></div></div></div>
-    <div class="score-item glass-card"><div class="score-name">Medium Risk</div><div class="score-metrics"><span>P: 0.932</span><span>R: 0.941</span><span>F1: 0.936</span></div><div class="score-bar-wrap"><div class="score-bar" style="width:93.6%;background:linear-gradient(90deg,#f59e0b,#ffaa00)"></div></div></div>
-    <div class="score-item glass-card"><div class="score-name">High Risk</div><div class="score-metrics"><span>P: 0.948</span><span>R: 0.952</span><span>F1: 0.950</span></div><div class="score-bar-wrap"><div class="score-bar" style="width:95.0%;background:linear-gradient(90deg,#ef4444,#ff6600)"></div></div></div>
-    <div class="score-item glass-card"><div class="score-name">Extreme Risk</div><div class="score-metrics"><span>P: 0.961</span><span>R: 0.957</span><span>F1: 0.959</span></div><div class="score-bar-wrap"><div class="score-bar" style="width:95.9%;background:linear-gradient(90deg,#dc2626,#aa44ff)"></div></div></div>
-  </div>
-
-  <div class="section-label" style="margin:28px 0 16px">FULL PIPELINE FLOW</div>
-  <div class="pipeline-flow glass-card">
-    <div class="flow-steps">
-      <span class="flow-step s1">DEM</span><span class="flow-arr">→</span>
-      <span class="flow-step s1">Void Fill</span><span class="flow-arr">→</span>
-      <span class="flow-step s1">Pit Fill</span><span class="flow-arr">→</span>
-      <span class="flow-step s1">D-Infinity</span><span class="flow-arr">→</span>
-      <span class="flow-step s1">TWI + Flow Acc</span><span class="flow-arr">→</span>
-      <span class="flow-step s2">AMC-SCS-CN</span><span class="flow-arr">→</span>
-      <span class="flow-step s2">SCS UH</span><span class="flow-arr">→</span>
-      <span class="flow-step s2">Hydrograph Q(t)</span><span class="flow-arr">→</span>
-      <span class="flow-step s3">Kinematic Wave</span><span class="flow-arr">→</span>
-      <span class="flow-step s3">Muskingum-Cunge</span><span class="flow-arr">→</span>
-      <span class="flow-step s3">Inundation</span><span class="flow-arr">→</span>
-      <span class="flow-step s3">Reservoir Override</span><span class="flow-arr">→</span>
-      <span class="flow-step s4">XGBoost</span><span class="flow-arr">→</span>
-      <span class="flow-step s4">Sentinel-1 CSI</span><span class="flow-arr">→</span>
-      <span class="flow-step s5">Vehicle A*</span><span class="flow-arr">→</span>
-      <span class="flow-step s5">Mission Control</span>
-    </div>
-  </div>
-</div>
-
-</div><!-- end container -->
-
-<div class="footer">
-  <div class="footer-brand">JAL DRISHTI</div>
-  <div class="footer-sub">AI-Powered Flood Intelligence · Technical Methodology · v1.0</div>
-  <div class="footer-copy">© 2026 Team Jal Drishti · MIT License</div>
+</main>
 </div>
 
 <script src="js/nav.js?v=1.0"></script>
-<script src="js/voice-settings.js?v=1.0"></script>
-<script src="js/methodology-engine.js"></script>
+<script src="js/flood-scenarios.js?v=1.6"></script>
+<script src="js/methodology.js?v=1.0"></script>
 <script>
-document.addEventListener("DOMContentLoaded",function(){
+document.addEventListener('DOMContentLoaded', function () {
   JalDrishtiNav.renderNav('#main-nav-links', 'methodology');
-  if(typeof renderMathInElement==='function'){
-    renderMathInElement(document.body,{delimiters:[{left:"$$",right:"$$",display:true},{left:"$",right:"$",display:false}],throwOnError:false});
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(document.body, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false });
   }
 });
 </script>
