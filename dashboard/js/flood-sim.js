@@ -21,7 +21,7 @@
     const HOUR = 3600;
     const EXPOSED_M = 0.3;       // people standing in water deeper than this are counted as exposed
     const LIFE_RISK_M = 1.5;     // ... and at risk to life above this, or in fast water (d*v > 1)
-    const WET_M = 0.15;          // area counted as inundated
+    const WET_M = 0.1;           // area counted as inundated (the map draws water from the same depth)
 
     const listeners = {};
     const terrainCache = {};

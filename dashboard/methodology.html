@@ -240,7 +240,7 @@ why every grid cell is green before the simulation runs.</p>
   <caption>Thresholds used for people</caption>
   <thead><tr><th>Measure</th><th>Rule</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>Inundated</td><td>depth &gt; 0.15&nbsp;m</td><td>ankle-deep: roads and fields visibly under water</td></tr>
+    <tr><td>Inundated</td><td>depth &gt; 0.10&nbsp;m</td><td>roads and fields visibly under water; the map draws water from the same depth</td></tr>
     <tr><td>People in water</td><td>depth &gt; 0.30&nbsp;m</td><td>knee-deep: walking becomes difficult and cars stall</td></tr>
     <tr><td>At risk to life</td><td>depth &gt; 1.5&nbsp;m, or depth × speed &gt; 1&nbsp;m²/s</td><td>adults lose footing in fast flow (Jonkman &amp; Penning-Rowsell 2008)</td></tr>
   </tbody>
@@ -261,8 +261,8 @@ hexagon is not rated severe for a small pond.</p>
   <tbody>
     <tr><td><span class="sw" style="background:#7a0c12"></span>Severe</td><td>max depth ≥ 2&nbsp;m over ≥ 35&nbsp;% of the land, or ≥ 12&nbsp;% of residents at risk to life</td></tr>
     <tr><td><span class="sw" style="background:#e0352b"></span>High</td><td>max depth ≥ 1&nbsp;m over ≥ 20&nbsp;%, or ≥ 50&nbsp;% flooded, or ≥ 25&nbsp;% of residents in water</td></tr>
-    <tr><td><span class="sw" style="background:#f2c12e"></span>Moderate</td><td>max depth ≥ 0.5&nbsp;m over ≥ 5&nbsp;%, or ≥ 12&nbsp;% flooded, or ≥ 6&nbsp;% of residents in water</td></tr>
-    <tr><td><span class="sw" style="background:#56b84f"></span>Low</td><td>more than 2&nbsp;% flooded</td></tr>
+    <tr><td><span class="sw" style="background:#f2c12e"></span>Moderate</td><td>≥ 3&nbsp;% of the land flooded, or any water ≥ 0.5&nbsp;m deep, or ≥ 6&nbsp;% of residents in water</td></tr>
+    <tr><td><span class="sw" style="background:#56b84f"></span>Low</td><td>a trace of floodwater (under 3&nbsp;% of the land)</td></tr>
     <tr><td><span class="sw" style="background:#2f9e57"></span>Safe</td><td>otherwise</td></tr>
   </tbody>
 </table>
@@ -274,11 +274,14 @@ through is also rated by how far that river has risen: at least moderate at 0.4&
 <section id="display">
 <h2><span class="n">8</span>What the map shows</h2>
 <p>The water surface is drawn from the model's depth field, blended between the two snapshots
-either side of the clock time, and draped over the 3D terrain. Colour follows depth (thin sheets
-are pale and translucent, deep water darker) and turns brown where the sediment tracer is high.
-Thin runoff sheets on steep hillsides are hidden, because they are not flooding. Flow arrows
-follow the model's velocity field, and a faint silt stain marks ground that was flooded and has
-since drained. The gauge chart reads the same snapshots at one river cell, so it always agrees
+either side of the clock time, and draped over the 3D terrain. Like the grid and the figures, it
+shows floodwater: water above the level at T+0, from 0.10&nbsp;m deep. River channels are drawn at
+full depth, so before the storm only the rivers show. Colour follows depth (thin sheets are pale
+and translucent, deep water darker) and turns brown where the sediment tracer is high. Thin
+runoff sheets on steep hillsides are hidden, because they are not flooding. Arrows show the
+depth-weighted mean flow of each block of cells, larger and brighter where the water moves faster;
+more of them appear as you zoom in. A faint silt stain marks ground that was flooded and has since
+drained. The gauge chart reads the same snapshots at one river cell, so it always agrees
 with the map.</p>
 </section>
 
