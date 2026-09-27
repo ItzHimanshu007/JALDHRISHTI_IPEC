@@ -275,7 +275,8 @@
             const oro = 0.65 + 0.9 * (t.z[i] - zlo) / (zhi - zlo);   // orographic lift on the Ghats
             rainWeight[i] = oro * (0.8 + 0.4 * noise[i]);
         }
-        const f = baseFields(t, { nLand: 0.07, nChannel: 0.04, channelKm2: 1.5,
+        // boulder-bed mountain streams choked with debris and vegetation
+        const f = baseFields(t, { nLand: 0.07, nChannel: 0.06, channelKm2: 1.5,
             urban: [{ lng: 76.1320, lat: 11.5529, radiusKm: 0.6, drainMmH: 8 }] });
 
         // Landslide source: the steepest hillside in the valley head above
@@ -322,7 +323,8 @@
             summary: 'Steady orographic monsoon rain on the Western Ghats for 24 h. Slope stability (infinite-slope model) decides whether the valley head above Punchirimattam fails; debris is routed down the Punnapuzha through Mundakkai and Chooralmala.',
             startHour: 20,
             tStart, z: t.z, rain, rainWeight, rainConc: 0.12,
-            infil: { f0: 16 / 1000 / HOUR, fc: 3.5 / 1000 / HOUR, Fk: 0.035 },
+            // laterite soils already soaked by the preceding monsoon days soak up little more
+            infil: { f0: 8 / 1000 / HOUR, fc: 2 / 1000 / HOUR, Fk: 0.02 },
             ...f, inflows: [], pulses, stage: null,
             gauge: {
                 name: 'Punnapuzha at Chooralmala', cell: chooralmala, kind: 'depth', unit: 'm depth',

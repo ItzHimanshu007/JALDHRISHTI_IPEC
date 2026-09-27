@@ -199,6 +199,7 @@
         }
         // ---- display fields (physics untouched)
         const t = st.terrain, nx = t.nx, ny = t.ny, raw = field.raw, show = field.show, dd = field.d;
+        const hilly = t.dx < 150;                                  // Meppadi's fine hill grid
         if (!field.trace || field.trace.length !== N) {
             field.trace = new Float32Array(N); field.shade = new Float32Array(N);
             field.steep = new Float32Array(N); field.thr = new Float32Array(N);
@@ -210,7 +211,7 @@
             for (let i = 0; i < N; i++) {
                 const sd = Math.max(0, Math.min(1, (t.slope[i] - 6) / 24));
                 field.steep[i] = sd * sd * (3 - 2 * sd);
-                field.thr[i] = 0.25 * field.steep[i];
+                field.thr[i] = (t.dx < 150 ? 0.1 : 0.25) * field.steep[i];
             }
         }
         const peak = f0.peak;
@@ -230,7 +231,12 @@
                 // blend with the 3x3 mean: isolated puddles fade, connected sheets stay;
                 // deep channels widen a little so rivers read at district scale
                 let v = 0.35 * show[i] + 0.65 * sum / n;
-                if (m > 1) v = Math.max(v, 0.45 * m);
+                if (hilly) {
+                    // 100 m hill grid: streams are one or two cells wide, so never
+                    // average a wet cell away, and let deeper streams spill a little
+                    v = Math.max(v, show[i]);
+                    if (m > 0.5) v = Math.max(v, 0.4 * m);
+                } else if (m > 1) v = Math.max(v, 0.45 * m);
                 dd[i] = Math.max(0, v - field.thr[i]);          // hillside sheet flow drops out
                 field.trace[i] = peak ? (riv[i] ? peak[i] : Math.max(0, peak[i] - base[i])) / 1000 : 0;
                 // light the water surface (ground + water) with the sun: sheets on
