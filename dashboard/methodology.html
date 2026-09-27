@@ -4,364 +4,422 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Methodology · Jal Drishti</title>
-<meta name="description" content="How the Jal Drishti flood simulation works: terrain preparation, the shallow-water model, the three flood scenarios, how risk is scored, and the model's limits.">
+<meta name="description" content="Technical note on the Jal Drishti flood simulation: terrain, the shallow-water model, the storms and scenarios for Meppadi, Darbhanga and Dhemaji, risk scoring, evacuation routing, results and limitations.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-<link rel="stylesheet" href="css/methodology.css?v=2.0">
+<link rel="stylesheet" href="css/methodology.css?v=3.0">
 </head>
 <body>
 
 <header class="bar">
-  <a href="index.html" class="brand"><span class="brand__mark"></span>Jal Drishti <span class="brand__sub">Methodology</span></a>
+  <a href="index.html" class="brand">Jal Drishti</a>
   <nav class="bar__nav" id="main-nav-links"></nav>
 </header>
 
 <div class="layout">
 
 <aside class="toc" aria-label="Contents">
-  <div class="toc__title">Contents</div>
+  <p class="toc__title">Contents</p>
   <ol>
-    <li><a href="#summary">Summary</a></li>
-    <li><a href="#areas">Study areas</a></li>
+    <li><a href="#background">Background</a></li>
+    <li><a href="#system">How it fits together</a></li>
+    <li><a href="#areas">Study areas and data</a></li>
     <li><a href="#terrain">Terrain</a></li>
     <li><a href="#model">Flow model</a></li>
-    <li><a href="#forcing">Rain and river inflows</a></li>
-    <li><a href="#scenarios">The three scenarios</a></li>
-    <li><a href="#risk">From water depth to risk</a></li>
-    <li><a href="#display">What the map shows</a></li>
-    <li><a href="#checks">Checks and run times</a></li>
+    <li><a href="#forcing">Storms and rivers</a></li>
+    <li><a href="#scenarios">Scenarios</a></li>
+    <li><a href="#risk">Depth to risk</a></li>
+    <li><a href="#routes">Evacuation routes</a></li>
+    <li><a href="#results">Results</a></li>
     <li><a href="#limits">Limitations</a></li>
-    <li><a href="#next">Towards an operational system</a></li>
-    <li><a href="#refs">References</a></li>
+    <li><a href="#next">Next steps</a></li>
   </ol>
+  <p class="toc__title toc__title--sub">Also</p>
+  <ul>
+    <li><a href="#refs">References</a></li>
+    <li><a href="#history">Revision history</a></li>
+  </ul>
 </aside>
 
 <main class="doc">
 
-<p class="doc__kicker">Technical note</p>
-<h1>How the flood simulation works</h1>
-<p class="lede">Jal Drishti runs a two-dimensional flood model in the browser over the whole of
-Meppadi panchayat (Wayanad), Darbhanga district (Bihar) and Dhemaji district (Assam). This note
-describes what the model computes, which inputs are real and which are made up for the
-demonstration, and where the results should not be trusted.</p>
+<p class="meta">Technical note &middot; version 0.9 &middot; 27 September 2026</p>
+<h1>Simulating monsoon floods in Meppadi, Darbhanga and Dhemaji</h1>
+<p class="byline">Team Jal Drishti</p>
 
-<section id="summary">
-<h2><span class="n">1</span>Summary</h2>
-<p>For each area the dashboard simulates one day of steady monsoon rain: 200&nbsp;mm falling
-at a near-constant rate from T+0 to T+24&nbsp;h. Water moves over the real terrain according to
-the shallow-water equations, collects in valleys and low plains, and is added to by rivers
-entering from outside the area. Every 10–15 simulated minutes the model saves a snapshot of
-water depth and velocity; the map, the hexagon grid, the gauge chart and the situation
-figures are all read from those snapshots.</p>
-<p>The three areas flood for different reasons, so each has its own scenario: a flash flood with a
-debris flow in the Western Ghats, embankment breaches on the Bihar plain, and flash
-tributaries against a rising Brahmaputra in Assam.</p>
+<div class="abstract">
+<p><b>Summary.</b> Jal Drishti is a flood operations dashboard for three very different places:
+a hill panchayat in the Western Ghats, an embanked river plain in north Bihar and a
+Brahmaputra floodplain district in Assam. Behind the map is a two-dimensional shallow-water
+model that runs in the browser over each whole area on real SRTM terrain. It simulates one day
+of continuous monsoon rain (400&nbsp;mm in Meppadi, 200&nbsp;mm on the plains), with the way each
+place actually floods built in: slope failure and debris flow, embankment breaches, and flash
+tributaries against a high main river. The water it produces drives everything else on the
+dashboard: the risk grid, the exposure figures, the gauge chart and the evacuation routes. The
+storms are synthetic; the terrain is not. This note describes the model, the choices we made,
+what the results look like and where they should not be trusted.</p>
+</div>
 
-<table class="tbl tbl--status">
-  <caption>What is real and what is synthetic</caption>
-  <thead><tr><th>Input</th><th>Source</th><th>Status</th></tr></thead>
-  <tbody>
-    <tr><td>Ground elevation</td><td>SRTM, via AWS Terrain Tiles (Terrarium encoding)</td><td><span class="chip chip--real">Real</span></td></tr>
-    <tr><td>Area boundaries</td><td>Panchayat / district boundary files in <code>data/raw/boundaries</code></td><td><span class="chip chip--real">Real</span></td></tr>
-    <tr><td>Relief facilities</td><td>Named shelters, hospitals and rescue bases in <code>data/raw/infrastructure</code></td><td><span class="chip chip--real">Real locations</span></td></tr>
-    <tr><td>Residents per cell</td><td>District census density spread around named settlements</td><td><span class="chip chip--model">Modelled</span></td></tr>
-    <tr><td>Rainfall</td><td>Steady 24&nbsp;h storm, 200&nbsp;mm</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
-    <tr><td>River inflows</td><td>Unit-hydrograph response to the synthetic rain</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
-    <tr><td>Embankments, breach and landslide timing</td><td>Rule-based, computed during the run</td><td><span class="chip chip--synth">Synthetic</span></td></tr>
-  </tbody>
-</table>
+<section id="background">
+<h2>1. Background</h2>
+<p>The three areas were picked because each floods in a different way, and a single generic
+"flood risk" layer would describe none of them well.</p>
+<p><b>Meppadi, Wayanad (Kerala).</b> On 30 July 2024, after two days of extreme rain, a debris
+flow that started on the slopes above Punchirimattam swept down the Punnapuzha valley through
+Mundakkai and Chooralmala. More than 200 people were killed. The hazard here is not standing
+water but fast, sediment-laden flow in narrow valleys, triggered when saturated hillsides fail.</p>
+<p><b>Darbhanga (Bihar).</b> The district lies across the Kamla&ndash;Balan and Bagmati river
+systems that come down from Nepal. The rivers are confined by long earthen embankments, and
+when one breaches the water spreads across a plain that is almost flat. In August 2008 the Kosi,
+to the east, broke its embankment at Kusaha and flooded large parts of north Bihar, affecting
+more than three million people. Once the rivers run high, sluices on the town outfalls are shut
+and rain has nowhere to drain, so waterlogging adds to the river flood.</p>
+<p><b>Dhemaji (Assam).</b> Short, steep rivers such as the Jiadhal come off the Arunachal
+foothills and rise within hours of heavy rain, carrying sand that buries fields and shifts
+their channels. When the Brahmaputra is high at the same time, their outfalls are drowned and
+the water spreads out as wide, shallow sheets across the district.</p>
+</section>
+
+<section id="system">
+<h2>2. How it fits together</h2>
+<figure class="fig fig--diagram">
+<svg viewBox="0 0 720 250" role="img" aria-label="Terrain and boundaries are baked offline into model grids. In the browser, a scenario builder adds the storm, rivers, embankments and slope model; the shallow-water solver runs in a Web Worker and posts snapshots every 10 to 15 simulated minutes; the map, the risk grid and figures, and the evacuation routes all read those snapshots.">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>
+  <g class="dg-box"><rect x="4" y="20" width="150" height="62" rx="4"/><text x="16" y="44">SRTM terrain,</text><text x="16" y="62">area boundaries</text></g>
+  <g class="dg-box"><rect x="4" y="150" width="150" height="62" rx="4"/><text x="16" y="174">Terrain bake</text><text x="16" y="192" class="dg-sub">Python, offline</text></g>
+  <g class="dg-box"><rect x="196" y="85" width="160" height="80" rx="4"/><text x="208" y="109">Scenario builder</text><text x="208" y="127" class="dg-sub">storm, rivers,</text><text x="208" y="143" class="dg-sub">embankments, slopes</text></g>
+  <g class="dg-box dg-box--key"><rect x="394" y="85" width="150" height="80" rx="4"/><text x="406" y="109">Shallow-water</text><text x="406" y="127">solver</text><text x="406" y="145" class="dg-sub">Web Worker</text></g>
+  <g class="dg-box"><rect x="584" y="10" width="132" height="54" rx="4"/><text x="596" y="33">Map</text><text x="596" y="51" class="dg-sub">water, flow arrows</text></g>
+  <g class="dg-box"><rect x="584" y="98" width="132" height="54" rx="4"/><text x="596" y="121">Risk grid</text><text x="596" y="139" class="dg-sub">figures, gauge</text></g>
+  <g class="dg-box"><rect x="584" y="186" width="132" height="54" rx="4"/><text x="596" y="209">Evacuation</text><text x="596" y="227" class="dg-sub">routes</text></g>
+  <g class="dg-line">
+    <path d="M79 82 V150" marker-end="url(#ah)"/>
+    <path d="M154 181 H175 V140 H196" marker-end="url(#ah)"/>
+    <path d="M356 125 H394" marker-end="url(#ah)"/>
+    <path d="M544 125 H562 V37 H584" marker-end="url(#ah)"/>
+    <path d="M544 125 H584" marker-end="url(#ah)"/>
+    <path d="M544 125 H562 V213 H584" marker-end="url(#ah)"/>
+  </g>
+  <text x="552" y="80" class="dg-note" transform="rotate(-90 552 80)">snapshots</text>
+</svg>
+<figcaption>Figure 1. Data flow. The terrain is prepared once; everything else runs in the
+browser when an area is opened. The solver posts a snapshot of depth, velocity and sediment every
+10 minutes of simulated time (15 on the larger plains grids), so playback starts before the run
+has finished.</figcaption>
+</figure>
 </section>
 
 <section id="areas">
-<h2><span class="n">2</span>Study areas</h2>
+<h2>3. Study areas and data</h2>
 <p>Each model domain is the area's bounding box plus a 35&nbsp;% margin, so that water from
-outside the boundary (hillsides, upstream plains) can flow in. Results are only reported for
+outside the boundary (hillsides, upstream plains) can flow in. Results are reported only for
 cells inside the boundary.</p>
 <table class="tbl">
-  <thead><tr><th>Area</th><th class="r">Inside boundary</th><th class="r">Model domain</th><th class="r">Cell size</th><th class="r">Grid</th><th>Elevation</th><th>Flood mechanism</th></tr></thead>
+  <thead><tr><th>Area</th><th class="r">Inside boundary</th><th class="r">Model domain</th><th class="r">Cell</th><th class="r">Grid</th><th>Elevation</th></tr></thead>
   <tbody>
-    <tr><td>Meppadi, Wayanad</td><td class="r">135 km²</td><td class="r">362 km²</td><td class="r">100 m</td><td class="r">170 × 213</td><td>205–2,200 m</td><td>Flash flood, debris flow</td></tr>
-    <tr><td>Darbhanga, Bihar</td><td class="r">2,595 km²</td><td class="r">6,954 km²</td><td class="r">320 m</td><td class="r">250 × 272</td><td>40–62 m</td><td>Embankment breach, drainage congestion</td></tr>
-    <tr><td>Dhemaji, Assam</td><td class="r">2,561 km²</td><td class="r">9,377 km²</td><td class="r">400 m</td><td class="r">337 × 174</td><td>91–1,064 m</td><td>Flash tributaries, Brahmaputra backwater</td></tr>
+    <tr><td>Meppadi panchayat, Wayanad</td><td class="r">135 km²</td><td class="r">362 km²</td><td class="r">100 m</td><td class="r">170 × 213</td><td>205&ndash;2,200 m</td></tr>
+    <tr><td>Darbhanga district, Bihar</td><td class="r">2,595 km²</td><td class="r">6,954 km²</td><td class="r">320 m</td><td class="r">250 × 272</td><td>40&ndash;62 m</td></tr>
+    <tr><td>Dhemaji district, Assam</td><td class="r">2,561 km²</td><td class="r">9,377 km²</td><td class="r">400 m</td><td class="r">337 × 174</td><td>91&ndash;1,064 m</td></tr>
   </tbody>
 </table>
-<p class="note">Cell sizes were chosen so that each run takes well under a minute in a browser.
-Meppadi's steep, narrow valleys need the finer grid; on the plains a 320–400&nbsp;m cell still
-resolves the main rivers and embankments.</p>
+<p>Cell sizes were chosen so a 24-hour run finishes in well under a minute on a laptop.
+Meppadi's narrow valleys need the finer grid; on the plains 320&ndash;400&nbsp;m still resolves
+the main rivers and embankments.</p>
+<table class="tbl">
+  <caption>Inputs</caption>
+  <thead><tr><th>Input</th><th>Source</th><th>Real or synthetic</th></tr></thead>
+  <tbody>
+    <tr><td>Ground elevation</td><td>SRTM (about 30&nbsp;m), read from AWS Terrain Tiles</td><td>Real</td></tr>
+    <tr><td>Area boundaries</td><td>Panchayat and district boundaries, &copy; OpenStreetMap contributors (ODbL)</td><td>Real</td></tr>
+    <tr><td>Settlements</td><td>Named places, &copy; OpenStreetMap contributors (ODbL)</td><td>Real</td></tr>
+    <tr><td>Relief facilities</td><td>Shelters, hospitals, high ground and rescue bases compiled for the dashboard</td><td>Real names, approximate positions</td></tr>
+    <tr><td>Residents per cell</td><td>Census district density distributed around the named settlements</td><td>Modelled</td></tr>
+    <tr><td>Rainfall</td><td>Steady 24&nbsp;h storm (section 6)</td><td>Synthetic</td></tr>
+    <tr><td>River inflows, breach and slope-failure timing</td><td>Computed from the synthetic rain during the run</td><td>Synthetic</td></tr>
+  </tbody>
+</table>
 </section>
 
 <section id="terrain">
-<h2><span class="n">3</span>Terrain preparation</h2>
-<p>Terrain is prepared once, offline, by <code>scripts/build_sim_terrain.py</code> and stored as
-<code>data/sim/&lt;area&gt;_terrain.json</code>. The steps are:</p>
-<ol class="steps">
-  <li><b>Sample the DEM.</b> Terrarium tiles are read at zoom 12 (Meppadi) or 11 (the plains) and
+<h2>4. Terrain</h2>
+<p>Terrain is prepared by <code>scripts/build_sim_terrain.py</code> and stored as
+<code>data/sim/&lt;area&gt;_terrain.json</code>.</p>
+<ol>
+  <li><b>Sample.</b> Terrain tiles are read at zoom 12 for Meppadi and 11 for the plains and
     resampled to the model grid.</li>
-  <li><b>Smooth.</b> A light Gaussian filter (σ = 0.7–1.0 cells) removes SRTM speckle, which
-    otherwise creates false pools on flat ground.</li>
-  <li><b>Fill pits.</b> A priority-flood fill (Barnes et al. 2014) removes enclosed depressions
-    that are artefacts of the DEM. Only shallow pits are filled on the plains (up to 1&nbsp;m),
-    so real low-lying basins stay; deep pits in the Dhemaji hills are filled fully.</li>
-  <li><b>Flow accumulation.</b> D8 flow directions (O'Callaghan &amp; Mark 1984) give the
-    upstream drainage area of every cell. The model uses it to find rivers entering each domain,
-    trace their course, and set channel roughness.</li>
-  <li><b>Boundary mask.</b> The area boundary is rasterised onto the grid.</li>
+  <li><b>Smooth.</b> A light Gaussian filter (&sigma; = 0.7&ndash;1.0 cells) removes SRTM speckle,
+    which otherwise creates false pools on flat ground.</li>
+  <li><b>Fill pits.</b> A priority-flood fill (Barnes et al. 2014) removes enclosed hollows that are
+    artefacts of the DEM. On the plains only pits up to 1&nbsp;m deep are filled, so real
+    low-lying basins stay; deep artefact pits in the Dhemaji hills are filled completely.</li>
+  <li><b>Flow accumulation.</b> D8 flow directions (O'Callaghan and Mark 1984) give the upstream
+    area of every cell. The scenarios use it to find rivers entering each domain, trace their
+    course and set channel roughness.</li>
+  <li><b>Boundary.</b> The area boundary is rasterised onto the grid.</li>
 </ol>
-<p>Slope is computed from the smoothed surface. Height above the nearest drainage line
-(HAND; Rennó et al. 2008) is computed in the browser by a distance transform that carries the
-elevation of the nearest stream cell; it drives the terrain class shown on each grid hexagon.</p>
+<p>Height above the nearest drainage line (HAND; Renn&oacute; et al. 2008) is computed in the
+browser and used, with slope, to describe each hexagon of the risk grid before the storm.</p>
 </section>
 
 <section id="model">
-<h2><span class="n">4</span>Flow model</h2>
+<h2>5. Flow model</h2>
 <p>The solver (<code>js/flood-sim-solver.js</code>) uses the local-inertial form of the
-shallow-water equations, the scheme used in LISFLOOD-FP (Bates et al. 2010) with the
-stability treatment of de Almeida et al. (2012). Water depth <i>h</i> is stored at cell centres
-and unit discharge <i>q</i> (m²/s) on the faces between cells. For each face, each step:</p>
-<div class="eq">$$q^{t+\Delta t} = \frac{q^{t} - g\,h_f\,\Delta t\;\dfrac{\partial \eta}{\partial x}}{1 + g\,\Delta t\,n^2\,|q^{t}|\,/\,h_f^{7/3}}$$</div>
-<p>where η is the water surface elevation, <i>h<sub>f</sub></i> the flow depth at the face and
-<i>n</i> Manning's roughness. Depth in each cell is then updated from the net inflow and the
-local sources and sinks:</p>
+shallow-water equations used in LISFLOOD-FP (Bates et al. 2010), with the stability treatment of
+de Almeida et al. (2012). Depth <i>h</i> is held at cell centres and discharge per unit width
+<i>q</i> on the faces between cells. For each face and time step:</p>
+<div class="eq">$$q^{t+\Delta t} = \frac{q^{t} - g\,h_f\,\Delta t\,\dfrac{\partial \eta}{\partial x}}{1 + g\,\Delta t\,n^2\,|q^{t}|\,/\,h_f^{7/3}}$$</div>
+<p>where &eta; is the water surface, <i>h<sub>f</sub></i> the flow depth at the face and
+<i>n</i> Manning's roughness. Depth is then updated from the net flow and the local sources and
+sinks, rain <i>r</i>, infiltration <i>f</i> and town drainage <i>d</i>:</p>
 <div class="eq">$$h^{t+\Delta t} = h^{t} + \Delta t\left(\frac{\sum q_\text{in} - \sum q_\text{out}}{\Delta x} + r - f - d\right)$$</div>
-<p>with rain <i>r</i>, infiltration <i>f</i> and urban drainage <i>d</i>. Three safeguards keep
-the explicit scheme stable on 30° slopes and 7&nbsp;m-deep rivers alike:</p>
-<ul>
-  <li>the time step follows the wave-speed limit, $\Delta t = \min(30\,\text{s},\; 0.7\,\Delta x/\sqrt{g\,h_\text{max}})$;</li>
-  <li>discharge is capped at a Froude number of 1, $|q| \le h_f\sqrt{g\,h_f}$;</li>
-  <li>a cell can never lose more water in a step than it holds (positivity limiter).</li>
-</ul>
-<p><b>Infiltration</b> follows a Horton-type decay with the depth already infiltrated,
-$f = \left[f_c + (f_0 - f_c)\,e^{-F/F_k}\right]\cdot m$, where <i>m</i> lowers infiltration on
-river channels, steep thin-soiled hillsides and sealed town centres.
-<b>Roughness</b> rises from the base land value by up to 0.05 on steep hillsides (forest and
-plantation), falls to the channel value along rivers, and rises to 0.09 in built-up areas.
-A passive tracer carries sediment concentration, so debris and silt-laden river water can be
-told apart from ponded rain on the map.</p>
-
+<p>The scheme is explicit, so three things keep it stable on 30&deg; slopes and in 7&nbsp;m deep
+rivers alike: the time step follows the wave-speed limit,
+$\Delta t = \min(30\,\text{s},\ 0.7\,\Delta x/\sqrt{g\,h_\text{max}})$; discharge is capped at a
+Froude number of 1; and no cell can lose more water in a step than it holds.</p>
+<p>Infiltration decays with the depth already absorbed,
+$f = \left[f_c + (f_0 - f_c)\,e^{-F/F_k}\right] m$ (a Horton-type curve; Horton 1933), where
+<i>m</i> reduces it on river beds, on steep thin-soiled slopes and in built-up centres.
+Roughness increases by up to 0.05 on steep forested or plantation slopes and is 0.09 in built-up
+areas. A passive tracer carries sediment concentration, which is how debris and silty river
+water are told apart from ponded rain on the map.</p>
 <table class="tbl">
-  <caption>Surface parameters by area</caption>
+  <caption>Surface parameters</caption>
   <thead><tr><th>Parameter</th><th class="r">Meppadi</th><th class="r">Darbhanga</th><th class="r">Dhemaji</th></tr></thead>
   <tbody>
-    <tr><td>Manning <i>n</i>, land (s/m<sup>1/3</sup>)</td><td class="r">0.07</td><td class="r">0.05</td><td class="r">0.045</td></tr>
+    <tr><td>Manning <i>n</i>, land (s m<sup>&minus;1/3</sup>)</td><td class="r">0.07</td><td class="r">0.05</td><td class="r">0.045</td></tr>
     <tr><td>Manning <i>n</i>, channels</td><td class="r">0.06</td><td class="r">0.033</td><td class="r">0.03</td></tr>
     <tr><td>Initial infiltration <i>f</i><sub>0</sub> (mm/h)</td><td class="r">8</td><td class="r">10</td><td class="r">20</td></tr>
     <tr><td>Final infiltration <i>f<sub>c</sub></i> (mm/h)</td><td class="r">2</td><td class="r">2</td><td class="r">5</td></tr>
     <tr><td>Decay depth <i>F<sub>k</sub></i> (mm)</td><td class="r">20</td><td class="r">25</td><td class="r">40</td></tr>
-    <tr><td>Town drainage capacity (mm/h)</td><td class="r">8</td><td class="r">14 / 12</td><td class="r">8</td></tr>
+    <tr><td>Town drainage (mm/h)</td><td class="r">8</td><td class="r">14 and 12</td><td class="r">8</td></tr>
   </tbody>
 </table>
+<p class="note">Meppadi's low infiltration assumes laterite soils already soaked by the preceding
+monsoon days; its channel roughness is typical of boulder-bed mountain streams.</p>
 </section>
 
 <section id="forcing">
-<h2><span class="n">5</span>Rain and river inflows</h2>
-<h3>Rain</h3>
-<p>Rain starts at T+0 and falls without a break for 24 hours. The rate is almost constant: a
-15-minute ramp-in, then a few per cent of natural variation, scaled so the 24-hour total is
-exactly the storm total <i>P</i> (200&nbsp;mm):</p>
+<h2>6. Storms and rivers</h2>
+<p>Rain starts at T+0 and falls without a break for 24 hours at a near-constant rate: a
+15-minute ramp-in, then a few per cent of variation, scaled so the day's total is exactly
+<i>P</i>:</p>
 <div class="eq">$$R(t) = k\left[1 + 0.04\sin\!\left(\tfrac{2\pi t}{3.7\,\text{h}}\right) + 0.025\sin\!\left(\tfrac{2\pi t}{1.3\,\text{h}} + 1\right)\right],\qquad \int_0^{24\,\text{h}} R\,dt = P$$</div>
-<p>That is about 8&nbsp;mm/h. Because nothing lets up, water keeps building and the worst
-state is at the end of the day. Rain is spread over each area with a weight
-<i>w</i>(<i>x</i>): on the Ghats and the Arunachal foothills it increases with elevation
-(orographic lift), and everywhere a smooth random field adds ±20&nbsp;% so it is not uniform.
-The dashboard raises alerts when the running total passes the India Meteorological Department's
-24-hour categories: heavy (64.5&nbsp;mm) and very heavy (115.6&nbsp;mm).</p>
-
-<h3>River inflows</h3>
-<p>Rivers entering a domain are found where large drainage areas cross its edge. Their flow is
-a triangular unit hydrograph convolved with the rain over their catchment:</p>
+<p><i>P</i> is 400&nbsp;mm for Meppadi (about 17&nbsp;mm/h) and 200&nbsp;mm for Darbhanga and Dhemaji
+(about 8&nbsp;mm/h). The Western Ghats receive far heavier rain than the plains; 400&nbsp;mm in a day
+is still less than Wayanad received over the two days before the 2024 landslides. Because the rain
+never lets up, the worst state is at the end of the day. Within each area the rain is weighted
+towards high ground on the Ghats and the Arunachal foothills, with a smooth random variation of
+&plusmn;20&nbsp;%. Alerts follow the India Meteorological Department's daily categories: heavy
+(64.5&nbsp;mm), very heavy (115.6&nbsp;mm) and extremely heavy (204.5&nbsp;mm).</p>
+<p>Rivers entering a domain are found where large drainage areas cross its edge. Their flow is a
+triangular unit hydrograph convolved with the catchment rain,</p>
 <div class="eq">$$Q(t) = Q_b + G\,\frac{\sum_\tau R(t-\tau)\,u(\tau)}{\sum_\tau u(\tau)}$$</div>
-<p>where <i>u</i> rises linearly over the lag time and falls over the base time, <i>Q<sub>b</sub></i>
-is the base flow and the gain <i>G</i> scales with catchment area. The Brahmaputra is not
-rain-driven in the model; its inflow on Dhemaji's eastern edge rises smoothly from 16,000 to
-32,000&nbsp;m³/s through the day.</p>
+<p>where <i>u</i> rises over the lag time and falls over the base time, <i>Q<sub>b</sub></i> is base
+flow and the gain <i>G</i> scales with catchment area. The Brahmaputra is not rain-driven in the
+model: its inflow on Dhemaji's eastern edge rises from 16,000 to 32,000&nbsp;m³/s during the day.</p>
 </section>
 
 <section id="scenarios">
-<h2><span class="n">6</span>The three scenarios</h2>
+<h2>7. Scenarios</h2>
 
-<h3>Meppadi: flash flood and debris flow</h3>
-<p>Steep, rain-fed streams on the Western Ghats respond within an hour or two. The question is
-whether the valley head above Punchirimattam (the 2024 initiation zone) fails. Slope stability
-uses the infinite-slope factor of safety (Skempton &amp; DeLory 1957), with the soil's
-saturation <i>m</i> rising with the rain that has fallen on the slope:</p>
-<div class="eq">$$FS = \frac{c' + (\gamma - m\,\gamma_w)\,z\cos^2\!\beta\,\tan\phi'}{\gamma\,z\,\sin\beta\cos\beta},\qquad m = \min\!\left(1,\;\frac{w\,P_\text{cum}}{170\ \text{mm}}\right)$$</div>
-<p>with cohesion <i>c'</i> = 9&nbsp;kPa, friction angle φ' = 34°, soil depth <i>z</i> = 2.5&nbsp;m,
-soil unit weight γ = 19&nbsp;kN/m³ and γ<sub>w</sub> = 9.81&nbsp;kN/m³. When <i>FS</i> drops
-below 1 on the steepest cell of the source area, a debris pulse (about 1.9&nbsp;million&nbsp;m³ at
-200&nbsp;mm) is released over 15 minutes and routed by the flow model down the Punnapuzha
-through Mundakkai and Chooralmala. In the current storm this happens at T+13.1&nbsp;h. The map's
-hatched slopes are cells steeper than 26° that fail when saturated.</p>
-
+<h3>Meppadi: slope failure and debris flow</h3>
+<p>Stability of the valley head above Punchirimattam is judged with the infinite-slope factor of
+safety (Skempton and DeLory 1957). Soil saturation <i>m</i> rises with the rain that has fallen on
+the slope:</p>
+<div class="eq">$$FS = \frac{c' + (\gamma - m\,\gamma_w)\,z\cos^2\!\beta\,\tan\phi'}{\gamma\,z\,\sin\beta\cos\beta},\qquad m = \min\!\left(1,\ \frac{w\,P_\text{cum}}{170\ \text{mm}}\right)$$</div>
+<p>with cohesion <i>c'</i> = 9&nbsp;kPa, friction angle &phi;' = 34&deg;, soil depth
+<i>z</i> = 2.5&nbsp;m and unit weights &gamma; = 19 and &gamma;<sub>w</sub> = 9.81&nbsp;kN/m³. When
+<i>FS</i> drops below 1 on the steepest cell of the source area, 2.6&nbsp;million&nbsp;m³ of debris is
+released over 15 minutes and the flow model routes it down the Punnapuzha through Mundakkai and
+Chooralmala. With 400&nbsp;mm this happens at T+6.8&nbsp;h, and a smaller failure on the adjoining
+spur follows at T+7.6&nbsp;h. Slopes steeper than 26&deg; that fail when saturated are hatched on
+the map.</p>
 <figure class="fig" id="fsFigure">
-  <figcaption><b>Figure 1.</b> Factor of safety against slope angle, from the same function
-  the model uses. Wet soil loses about a third of its strength; below <i>FS</i> = 1 the slope
-  fails. Saturated slopes steeper than about 30° are unstable.</figcaption>
   <div class="legend">
-    <span><i style="background:#4a97c4"></i>Dry soil (m = 0)</span>
-    <span><i style="background:#d0782a"></i>Saturated soil (m = 1)</span>
+    <span><i style="background:#2f6f9f"></i>Dry soil</span>
+    <span><i style="background:#b85a24"></i>Saturated soil</span>
   </div>
-  <div class="chart" id="fsChart" role="img" aria-label="Factor of safety falls with slope angle; the saturated curve crosses 1 at about 30 degrees, the dry curve at about 48 degrees."></div>
-  <details class="fig__table"><summary>Show values</summary><div id="fsTable"></div></details>
+  <div class="chart" id="fsChart" role="img" aria-label="Factor of safety falls as slopes get steeper. Saturated soil drops below 1 at about 30 degrees, dry soil at about 48 degrees."></div>
+  <figcaption>Figure 2. Factor of safety against slope angle, drawn with the model's own function.
+  Saturation removes about a third of the soil's strength: saturated slopes steeper than about
+  30&deg; fail, where dry ones would stand to about 48&deg;.</figcaption>
+  <details class="fig__table"><summary>Values</summary><div id="fsTable"></div></details>
 </figure>
 
 <h3>Darbhanga: embankment breaches and drainage congestion</h3>
-<p>Floods here come down the embanked rivers from the Nepal side. The four largest rivers
-entering on the north and west edges are traced downstream. Each gets a channel carved 2&nbsp;m
-into the plain, starts 2&nbsp;m deep, and is lined on both banks by embankments 3.6&nbsp;m high.
-Their catchments extend well beyond the domain (taken as six times the drainage area at the
-edge) and respond with a lag of 3–4&nbsp;h.</p>
-<p>Every river crossing the district has one breach site, on its weakest (lowest) bank; on the
-river nearest Darbhanga town it is the weakest bank just upstream of the town. The solver
-watches the water level there. After an hour above Danger Level (1.3&nbsp;m above bank level,
-or, at the town site, 1.2&nbsp;m above the river's own level at T+0), the embankment cells are
-lowered and the flow model carries water through the gap. With 200&nbsp;mm of rain the three
-embankments fail at T+5.6, T+8.6 and T+12.7&nbsp;h. At T+6&nbsp;h the town outfall sluices close
-because the rivers are above them, and town drainage falls to 20&nbsp;% of capacity; rain trapped
-between embankments then ponds across the plain.</p>
+<p>The four largest rivers entering on the north and west edges are traced downstream. Each is
+given a channel 2&nbsp;m below the plain, 2&nbsp;m of water at the start and embankments 3.6&nbsp;m
+high on both banks. Their catchments reach far into Nepal (taken as six times the drainage area at
+the edge) and respond with a lag of 3&ndash;4&nbsp;h.</p>
+<p>Each river crossing the district has one breach site on its weakest bank; on the river nearest
+Darbhanga town it is the weakest bank just upstream of the town. The solver watches the water level
+there, and after an hour above Danger Level (1.3&nbsp;m above bank level, or 1.2&nbsp;m above the
+river's own T+0 level at the town site) the embankment is lowered and water flows through the gap.
+The three embankments fail at T+5.6, T+8.6 and T+12.7&nbsp;h. At T+6&nbsp;h the town outfall sluices
+close and town drainage drops to a fifth, so rain trapped between embankments ponds across the
+plain.</p>
 
 <h3>Dhemaji: flash tributaries and backwater</h3>
-<p>Six north-bank rivers (the Jiadhal and its neighbours) come off the Arunachal foothills with
-short lags (1.8–2.6&nbsp;h) and carry sand and silt. On a 400&nbsp;m grid the gorges above the
-foothills cannot be resolved, so each river is injected where it reaches the plain. Meanwhile
-the rising Brahmaputra on the southern and eastern side drowns their outfalls, so water spreads
-as wide, shallow sheets rather than draining away.</p>
+<p>Six north-bank rivers, the Jiadhal among them, come off the foothills with lags of
+1.8&ndash;2.6&nbsp;h and carry sand and silt. A 400&nbsp;m grid cannot resolve the gorges above the
+foothills, so each river enters the model where it reaches the plain. The rising Brahmaputra holds
+their outfalls up, and the water spreads as broad, shallow sheets.</p>
 </section>
 
 <section id="risk">
-<h2><span class="n">7</span>From water depth to risk</h2>
-<p><b>Floodwater is water above the level at T+0.</b> Rivers already flowing in their banks and
-permanent water bodies are not flooding, so every figure on the dashboard (inundated area, water
-accumulated, people in water, grid colours) uses the depth above that starting level. That is
-why every grid cell is green before the simulation runs.</p>
+<h2>8. From depth to risk</h2>
+<p>Floodwater is counted as water above the level at T+0, so rivers flowing in their banks are
+not flooding. Every figure on the dashboard, and the water drawn on the map, uses this depth.</p>
 <table class="tbl">
-  <caption>Thresholds used for people</caption>
-  <thead><tr><th>Measure</th><th>Rule</th><th>Why</th></tr></thead>
+  <caption>Thresholds for people</caption>
+  <thead><tr><th>Measure</th><th>Rule</th><th>Reason</th></tr></thead>
   <tbody>
-    <tr><td>Inundated</td><td>depth &gt; 0.10&nbsp;m</td><td>roads and fields visibly under water; the map draws water from the same depth</td></tr>
-    <tr><td>People in water</td><td>depth &gt; 0.30&nbsp;m</td><td>knee-deep: walking becomes difficult and cars stall</td></tr>
-    <tr><td>At risk to life</td><td>depth &gt; 1.5&nbsp;m, or depth × speed &gt; 1&nbsp;m²/s</td><td>adults lose footing in fast flow (Jonkman &amp; Penning-Rowsell 2008)</td></tr>
+    <tr><td>Inundated</td><td>depth over 0.10&nbsp;m</td><td>ground visibly under water; the map draws water from the same depth</td></tr>
+    <tr><td>People in water</td><td>depth over 0.30&nbsp;m</td><td>knee-deep; walking is hard and cars stall</td></tr>
+    <tr><td>At risk to life</td><td>depth over 1.5&nbsp;m, or depth &times; speed over 1&nbsp;m²/s</td><td>adults lose their footing in fast water (Jonkman and Penning-Rowsell 2008)</td></tr>
   </tbody>
 </table>
-<p>Residents per cell come from the dashboard's density model: district census density,
-concentrated around named settlements. River-channel cells keep a quarter of that density,
-since people live on banks, embankments and river islands but not in the channel itself.</p>
-
-<h3>Risk grid</h3>
-<p>Each area is divided into about 220 hexagons of equal size (IDs like <code>DBG-F12</code>, row A
-northernmost). Before the run, a hexagon shows its residents and terrain: elevation range, mean
-slope, height above the nearest river, distance to that river and a terrain class. As the
-simulation runs, each hexagon is classed by how much of it is under water and how many of its
-residents are in water. The classes are relative to the hexagon, so a large, sparsely populated
-hexagon is not rated severe for a small pond.</p>
+<p>Each area is divided into about 220 equal hexagons (IDs such as <code>DBG-F12</code>, row A in
+the north). Each hexagon is classed by the share of its land under water and the share of its
+residents in water, so a large, thinly populated hexagon is not rated severe for one pond.</p>
 <table class="tbl">
-  <thead><tr><th>Class</th><th>Rule (first that applies)</th></tr></thead>
+  <caption>Hexagon classes (first rule that applies)</caption>
+  <thead><tr><th>Class</th><th>Rule</th></tr></thead>
   <tbody>
-    <tr><td><span class="sw" style="background:#7a0c12"></span>Severe</td><td>max depth ≥ 2&nbsp;m over ≥ 35&nbsp;% of the land, or ≥ 12&nbsp;% of residents at risk to life</td></tr>
-    <tr><td><span class="sw" style="background:#e0352b"></span>High</td><td>max depth ≥ 1&nbsp;m over ≥ 20&nbsp;%, or ≥ 50&nbsp;% flooded, or ≥ 25&nbsp;% of residents in water</td></tr>
-    <tr><td><span class="sw" style="background:#f2c12e"></span>Moderate</td><td>≥ 3&nbsp;% of the land flooded, or any water ≥ 0.5&nbsp;m deep, or ≥ 6&nbsp;% of residents in water</td></tr>
-    <tr><td><span class="sw" style="background:#56b84f"></span>Low</td><td>a trace of floodwater (under 3&nbsp;% of the land)</td></tr>
-    <tr><td><span class="sw" style="background:#2f9e57"></span>Safe</td><td>otherwise</td></tr>
+    <tr><td><span class="sw" style="background:#7a0c12"></span>Severe</td><td>water 2&nbsp;m deep with 35&nbsp;% of the land flooded, or 12&nbsp;% of residents at risk to life</td></tr>
+    <tr><td><span class="sw" style="background:#e0352b"></span>High</td><td>water 1&nbsp;m deep with 20&nbsp;% flooded, or half the land flooded, or a quarter of residents in water</td></tr>
+    <tr><td><span class="sw" style="background:#f2c12e"></span>Moderate</td><td>3&nbsp;% of the land flooded, any water 0.5&nbsp;m deep, or 6&nbsp;% of residents in water</td></tr>
+    <tr><td><span class="sw" style="background:#56b84f"></span>Low</td><td>a trace of floodwater</td></tr>
+    <tr><td><span class="sw" style="background:#2f9e57"></span>Safe</td><td>no floodwater</td></tr>
   </tbody>
 </table>
-<p>In Darbhanga, where the rivers themselves are the main hazard, a hexagon that a river runs
-through is also rated by how far that river has risen: at least moderate at 0.4&nbsp;m, high at
-1&nbsp;m and severe at 2&nbsp;m above its T+0 level.</p>
+<p>In Darbhanga a hexagon that a river runs through is also rated by how far the river has risen:
+at least moderate at 0.4&nbsp;m, high at 1&nbsp;m and severe at 2&nbsp;m.</p>
 </section>
 
-<section id="display">
-<h2><span class="n">8</span>What the map shows</h2>
-<p>The water surface is drawn from the model's depth field, blended between the two snapshots
-either side of the clock time, and draped over the 3D terrain. Like the grid and the figures, it
-shows floodwater: water above the level at T+0, from 0.10&nbsp;m deep. River channels are drawn at
-full depth, so before the storm only the rivers show. Colour follows depth (thin sheets are pale
-and translucent, deep water darker) and turns brown where the sediment tracer is high. Thin
-runoff sheets on steep hillsides are hidden, because they are not flooding. Arrows show the
-depth-weighted mean flow of each block of cells, larger and brighter where the water moves faster;
-more of them appear as you zoom in. A faint silt stain marks ground that was flooded and has since
-drained. The gauge chart reads the same snapshots at one river cell, so it always agrees
-with the map.</p>
+<section id="routes">
+<h2>9. Evacuation routes</h2>
+<p>Clicking the map in route mode plans up to three routes from that point
+(<code>js/flood-routes.js</code>). They only ever end at a safe place: a listed shelter, hospital,
+high-ground point or rescue base that stays dry in the model to T+24&nbsp;h, or raised ground found
+by scanning the area in 1&nbsp;km (hills) or 3&nbsp;km (plains) blocks for the highest gentle cell
+that never floods. On the Bihar plain this picks out the embankment crests, where people do shelter
+in real floods. Listed places that the model floods are left out, and the route panel says so.</p>
+<p>A single Dijkstra search (Dijkstra 1959) on the model grid gives the travel time to every
+candidate. Walking speed follows Tobler's hiking function (Tobler 1993) for slope and slows in
+shallow water. Water deeper than 0.45&nbsp;m or fast water (depth &times; speed over 0.5&nbsp;m²/s)
+expected in the next two hours cannot be walked through; crossing a river on foot costs the time to
+find a bridge. If the start is already in deep water, or every way out on foot is cut, the route
+is planned for a rescue boat at 6&nbsp;km/h through deep slack water, then on foot. Paths are
+straightened where the straight line is no worse and rounded by corner cutting (Chaikin 1974).</p>
 </section>
 
-<section id="checks">
-<h2><span class="n">9</span>Checks and run times</h2>
-<p><b>Mass balance.</b> At the end of every run the solver reports rain, inflow, infiltration,
-drainage, boundary outflow and stored water. The balance closes to better than 0.001&nbsp;% in all
-three areas.</p>
-<p><b>Results at 200&nbsp;mm.</b></p>
+<section id="results">
+<h2>10. Results</h2>
+<figure class="fig">
+  <div class="multiples" id="resultsChart"></div>
+  <figcaption>Figure 3. Flooded area inside each boundary (water over 0.10&nbsp;m above the T+0
+  level) through the 24-hour storm, from the model runs used in the dashboard. Each panel has its
+  own scale. Marks show the slope failures in Meppadi and the embankment breaches in
+  Darbhanga.</figcaption>
+  <details class="fig__table"><summary>Values</summary><div id="resultsTable"></div></details>
+</figure>
 <table class="tbl">
-  <thead><tr><th>Area</th><th class="r">Water accumulated, T+24&nbsp;h</th><th class="r">Inundated</th><th class="r">Key event</th><th class="r">Run time</th></tr></thead>
+  <caption>At T+24&nbsp;h</caption>
+  <thead><tr><th>Area</th><th class="r">Storm</th><th class="r">Flooded area</th><th class="r">Floodwater</th><th>Main events</th><th class="r">Run time</th></tr></thead>
   <tbody>
-    <tr><td>Meppadi</td><td class="r">5.8 million m³</td><td class="r">10.3 km²</td><td class="r">slope failure T+13.1&nbsp;h</td><td class="r">≈ 42&nbsp;s</td></tr>
-    <tr><td>Darbhanga</td><td class="r">395 million m³</td><td class="r">582 km²</td><td class="r">town-side breach T+12.7&nbsp;h</td><td class="r">≈ 47&nbsp;s</td></tr>
-    <tr><td>Dhemaji</td><td class="r">504 million m³</td><td class="r">573 km²</td><td class="r">flash surges from T+3.7&nbsp;h</td><td class="r">≈ 33&nbsp;s</td></tr>
+    <tr><td>Meppadi</td><td class="r">400 mm</td><td class="r">13.8 km²</td><td class="r">9.2 million m³</td><td>slope failures at T+6.8 and 7.6&nbsp;h</td><td class="r">42 s</td></tr>
+    <tr><td>Darbhanga</td><td class="r">200 mm</td><td class="r">720 km²</td><td class="r">395 million m³</td><td>breaches at T+5.6, 8.6 and 12.7&nbsp;h</td><td class="r">37 s</td></tr>
+    <tr><td>Dhemaji</td><td class="r">200 mm</td><td class="r">678 km²</td><td class="r">504 million m³</td><td>flash surges from T+3.7&nbsp;h</td><td class="r">26 s</td></tr>
   </tbody>
 </table>
-<p class="note">Run times are for a single CPU thread. The solver runs in a Web Worker and sends
-snapshots as it goes, so playback can start before the run finishes.</p>
+<p>The three areas behave as their flood types suggest. Meppadi floods within the first seven hours
+and then levels off: its valleys are steep, so extra rain runs out of the panchayat about as fast as
+it falls, and the debris flow shows as a spike at T+7&nbsp;h. Darbhanga starts slowly and
+accelerates as each breach opens and the sluices close. Dhemaji rises steadily as the tributaries
+and the Brahmaputra keep coming up.</p>
+<p><b>Checks.</b> Every run reports rain, inflow, infiltration, drainage, boundary outflow and stored
+water; the balance closes to better than 0.001&nbsp;% in all three areas. Run times are for one CPU
+thread in Node.js; in the browser the run happens in a Web Worker while playback starts.</p>
 </section>
 
 <section id="limits">
-<h2><span class="n">10</span>Limitations</h2>
+<h2>11. Limitations</h2>
 <ul>
-  <li><b>The forcing is synthetic.</b> Rain, river inflows and failure timings are plausible but
-    invented. The results show how each area responds to a storm of this kind, not a forecast of
-    a real event.</li>
-  <li><b>Not yet validated.</b> The model has not been compared with observed flood extents, so
-    its accuracy is unknown. It should not be used for real decisions until it has been.</li>
-  <li><b>SRTM is coarse on flat ground.</b> Its vertical error (several metres) is comparable to
-    the relief of the Bihar plain. Embankments and road levels are not in the DEM; the modelled
-    embankments are idealised.</li>
-  <li><b>Grid resolution.</b> At 320–400&nbsp;m, streets, buildings, culverts and small channels are
-    not resolved. Town drainage is a uniform sink, not a pipe network.</li>
-  <li><b>Population is modelled.</b> Residents per cell are an estimate from census density, not a
-    count. Exposure figures are indicative.</li>
-  <li><b>Risk classes are rules, not a trained model.</b> The thresholds are set by judgement and
-    have not been calibrated against damage or casualty data.</li>
+  <li><b>Synthetic forcing.</b> The storms, river inflows and failure times are plausible but made
+    up. The results show how each area responds to a storm of this kind; they are not a forecast.</li>
+  <li><b>Not validated.</b> The model has not yet been compared with observed flood extents, so its
+    accuracy is unknown, and it should not be used for real decisions until it has been.</li>
+  <li><b>Terrain.</b> SRTM's vertical error of several metres is comparable to the relief of the
+    Bihar plain. Real embankments and road levels are not in it; the modelled embankments are
+    idealised.</li>
+  <li><b>Resolution.</b> At 320&ndash;400&nbsp;m, streets, culverts and small drains are not
+    resolved, and town drainage is a uniform sink rather than a pipe network.</li>
+  <li><b>People.</b> Residents per cell are estimated from census density, not counted.</li>
+  <li><b>Risk classes.</b> The hexagon rules are set by judgement and have not been calibrated
+    against damage or casualty records.</li>
 </ul>
 </section>
 
 <section id="next">
-<h2><span class="n">11</span>Towards an operational system</h2>
-<p>None of the following is built; it is what would replace each synthetic part.</p>
+<h2>12. Next steps</h2>
 <table class="tbl">
-  <thead><tr><th>Part</th><th>Now</th><th>Operational</th></tr></thead>
+  <thead><tr><th>Part</th><th>Now</th><th>With real data</th></tr></thead>
   <tbody>
-    <tr><td>Rain</td><td>Synthetic 24&nbsp;h storm</td><td>IMD gridded forecasts and radar nowcasts, GPM IMERG for recent rain</td></tr>
-    <tr><td>Rivers</td><td>Unit hydrograph on synthetic rain</td><td>CWC gauge levels and forecasts at the domain edges</td></tr>
-    <tr><td>Terrain</td><td>SRTM 30&nbsp;m</td><td>Cartosat-1 or ALOS DEMs, surveyed embankment crests</td></tr>
-    <tr><td>Population</td><td>Density model</td><td>WorldPop or census-block counts, updated building footprints</td></tr>
-    <tr><td>Validation</td><td>Mass balance only</td><td>Past events against Sentinel-1 flood maps (hit rate, false alarms)</td></tr>
-    <tr><td>Compute</td><td>Browser Web Worker</td><td>Server-side GPU runs on a schedule, results streamed as tiles</td></tr>
+    <tr><td>Rain</td><td>Synthetic 24&nbsp;h storm</td><td>IMD gridded rainfall and forecasts; GPM IMERG for recent rain</td></tr>
+    <tr><td>Rivers</td><td>Unit hydrograph on synthetic rain</td><td>Central Water Commission gauge levels at the domain edges</td></tr>
+    <tr><td>Terrain</td><td>SRTM</td><td>Cartosat-1 (CartoDEM) or ALOS; surveyed embankment crests</td></tr>
+    <tr><td>People</td><td>Density model</td><td>WorldPop or census village counts; building footprints</td></tr>
+    <tr><td>Validation</td><td>Mass balance only</td><td>Past events against Sentinel-1 radar flood maps</td></tr>
+    <tr><td>Compute</td><td>In the browser</td><td>Scheduled GPU runs on a server, results served as map tiles</td></tr>
   </tbody>
 </table>
 </section>
 
 <section id="refs">
-<h2><span class="n">12</span>References</h2>
+<h2>References</h2>
 <ol class="refs">
-  <li>Barnes, R., Lehman, C., Mulla, D. (2014). Priority-flood: an optimal depression-filling and watershed-labeling algorithm for digital elevation models. <i>Computers &amp; Geosciences</i> 62, 117–127.</li>
-  <li>Bates, P.D., Horritt, M.S., Fewtrell, T.J. (2010). A simple inertial formulation of the shallow water equations for efficient two-dimensional flood inundation modelling. <i>Journal of Hydrology</i> 387, 33–45.</li>
-  <li>de Almeida, G.A.M., Bates, P., Freer, J.E., Souvignet, M. (2012). Improving the stability of a simple formulation of the shallow water equations for 2-D flood modeling. <i>Water Resources Research</i> 48, W05528.</li>
-  <li>Horton, R.E. (1933). The role of infiltration in the hydrologic cycle. <i>Transactions, American Geophysical Union</i> 14, 446–460.</li>
-  <li>Jonkman, S.N., Penning-Rowsell, E. (2008). Human instability in flood flows. <i>Journal of the American Water Resources Association</i> 44(5), 1208–1218.</li>
-  <li>O'Callaghan, J.F., Mark, D.M. (1984). The extraction of drainage networks from digital elevation data. <i>Computer Vision, Graphics, and Image Processing</i> 28, 323–344.</li>
-  <li>Rennó, C.D. et al. (2008). HAND, a new terrain descriptor using SRTM-DEM: mapping terra-firme rainforest environments in Amazonia. <i>Remote Sensing of Environment</i> 112, 3469–3481.</li>
-  <li>Skempton, A.W., DeLory, F.A. (1957). Stability of natural slopes in London Clay. <i>Proc. 4th International Conference on Soil Mechanics and Foundation Engineering</i>, vol. 2, 378–381.</li>
+  <li>Barnes, R., Lehman, C. and Mulla, D. (2014). Priority-flood: an optimal depression-filling and watershed-labeling algorithm for digital elevation models. <i>Computers &amp; Geosciences</i> 62, 117&ndash;127.</li>
+  <li>Bates, P.D., Horritt, M.S. and Fewtrell, T.J. (2010). A simple inertial formulation of the shallow water equations for efficient two-dimensional flood inundation modelling. <i>Journal of Hydrology</i> 387, 33&ndash;45.</li>
+  <li>Chaikin, G.M. (1974). An algorithm for high-speed curve generation. <i>Computer Graphics and Image Processing</i> 3, 346&ndash;349.</li>
+  <li>de Almeida, G.A.M., Bates, P., Freer, J.E. and Souvignet, M. (2012). Improving the stability of a simple formulation of the shallow water equations for 2-D flood modeling. <i>Water Resources Research</i> 48, W05528.</li>
+  <li>Dijkstra, E.W. (1959). A note on two problems in connexion with graphs. <i>Numerische Mathematik</i> 1, 269&ndash;271.</li>
+  <li>Horton, R.E. (1933). The role of infiltration in the hydrologic cycle. <i>Transactions, American Geophysical Union</i> 14, 446&ndash;460.</li>
+  <li>Jonkman, S.N. and Penning-Rowsell, E. (2008). Human instability in flood flows. <i>Journal of the American Water Resources Association</i> 44(5), 1208&ndash;1218.</li>
+  <li>O'Callaghan, J.F. and Mark, D.M. (1984). The extraction of drainage networks from digital elevation data. <i>Computer Vision, Graphics, and Image Processing</i> 28, 323&ndash;344.</li>
+  <li>Renn&oacute;, C.D. et al. (2008). HAND, a new terrain descriptor using SRTM-DEM: mapping terra-firme rainforest environments in Amazonia. <i>Remote Sensing of Environment</i> 112, 3469&ndash;3481.</li>
+  <li>Skempton, A.W. and DeLory, F.A. (1957). Stability of natural slopes in London Clay. <i>Proceedings of the 4th International Conference on Soil Mechanics and Foundation Engineering</i>, vol. 2, 378&ndash;381.</li>
+  <li>Tobler, W. (1993). Three presentations on geographical analysis and modeling. <i>NCGIA Technical Report</i> 93-1, University of California, Santa Barbara.</li>
 </ol>
-<p class="note">Source files: <code>scripts/build_sim_terrain.py</code>, <code>js/flood-scenarios.js</code>,
+<p class="note">Code: <code>scripts/build_sim_terrain.py</code>, <code>js/flood-scenarios.js</code>,
 <code>js/flood-sim-solver.js</code>, <code>js/flood-sim.js</code>, <code>js/flood-grid.js</code>,
-<code>js/flood-render.js</code>. A longer write-up is in <code>docs/FLOOD_SIMULATION.md</code>.</p>
+<code>js/flood-render.js</code>, <code>js/flood-routes.js</code>. A longer write-up is in
+<code>docs/FLOOD_SIMULATION.md</code>.</p>
+</section>
+
+<section id="history">
+<h2>Revision history</h2>
+<table class="tbl tbl--history">
+  <thead><tr><th>Version</th><th>Date</th><th>Changes</th></tr></thead>
+  <tbody>
+    <tr><td>0.9</td><td>27 Sep 2026</td><td>Meppadi storm raised to 400&nbsp;mm; saturated soils and rough mountain streams. Evacuation routes planned on the model. Flow arrows; map and figures use one 0.10&nbsp;m threshold.</td></tr>
+    <tr><td>0.8</td><td>26 Sep 2026</td><td>Steady 24&nbsp;h storm from T+0. Floodwater measured above the T+0 level. Darbhanga river corridors rated by river rise. Water accumulated readout.</td></tr>
+    <tr><td>0.7</td><td>26 Sep 2026</td><td>Terrain-aware runoff and water rendering; 3D terrain view; GIS profile for each hexagon.</td></tr>
+    <tr><td>0.6</td><td>26 Sep 2026</td><td>Simulation extended to each whole panchayat or district; hexagonal risk grid.</td></tr>
+    <tr><td>0.5</td><td>26 Sep 2026</td><td>Shallow-water model replaces the rule-based forecast; new operations layout.</td></tr>
+  </tbody>
+</table>
 </section>
 
 </main>
 </div>
 
 <script src="js/nav.js?v=1.0"></script>
-<script src="js/flood-scenarios.js?v=1.6"></script>
-<script src="js/methodology.js?v=1.0"></script>
+<script src="js/flood-scenarios.js?v=1.7"></script>
+<script src="js/methodology.js?v=2.0"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   JalDrishtiNav.renderNav('#main-nav-links', 'methodology');

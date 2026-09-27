@@ -21,6 +21,9 @@
     const HOUR = 3600;
     const EXPOSED_M = 0.3;       // people standing in water deeper than this are counted as exposed
     const LIFE_RISK_M = 1.5;     // ... and at risk to life above this, or in fast water (d*v > 1)
+    // 24 h storm total per area. The Western Ghats get far heavier rain than the
+    // plains: Meppadi's 400 mm is below the ~570 mm Wayanad saw in 48 h in 2024.
+    const STORM_MM = { wayanad_meppadi: 400, darbhanga: 200, dhemaji: 200 };
     const WET_M = 0.1;           // area counted as inundated (the map draws water from the same depth)
 
     const listeners = {};
@@ -308,7 +311,7 @@
         const sc = state.scenario, fl = state.flags;
         const t = cur.t;
 
-        // rain totals crossing the IMD categories (heavy 64.5 mm, very heavy 115.6 mm)
+        // rain totals crossing the IMD categories (heavy 64.5, very heavy 115.6, extremely heavy 204.5 mm)
         const rainNow = S.seriesValueAt(sc.rain, sc.tStart, t);
         const rainSoFar = S.seriesValueAt(sc.cumRain, sc.tStart, t);
         if (!fl.heavyRain && rainSoFar >= 64.5) {
@@ -318,6 +321,10 @@
         if (!fl.veryHeavyRain && rainSoFar >= 115.6) {
             fl.veryHeavyRain = true;
             pushDerived({ t, level: 'orange', kind: 'rain', title: 'Very heavy rainfall: 115.6 mm since T+0', detail: `${rainNow.toFixed(1)} mm/h continuing. Almost all further rain now runs off into rivers and low ground.` });
+        }
+        if (!fl.extremeRain && rainSoFar >= 204.5) {
+            fl.extremeRain = true;
+            pushDerived({ t, level: 'red', kind: 'rain', title: 'Extremely heavy rainfall: 204.5 mm since T+0', detail: `${rainNow.toFixed(1)} mm/h and still falling. IMD's highest daily category; slopes and streams are past their limits.` });
         }
 
         // settlements taking water
@@ -515,6 +522,7 @@
         setVillage(vid) {
             if (!S || !global.floodSolverProgram) return;
             state.villageId = vid;
+            state.storm = STORM_MM[vid] || 200;
             state.t = 0;
             setPlaying(false);
             start();
