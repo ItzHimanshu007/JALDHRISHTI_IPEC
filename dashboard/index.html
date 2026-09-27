@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=1.8">
+    <link rel="stylesheet" href="css/ops.css?v=1.9">
 </head>
 
 <body>
@@ -80,26 +80,6 @@
                 </div>
                 <canvas id="opsGaugeChart" class="gauge-chart" height="190"></canvas>
                 <div class="chart-legend" id="opsGaugeLegend"></div>
-            </section>
-
-            <section class="panel panel--grow" id="resourceAllocationPanel">
-                <div class="panel__head">
-                    <h2>Resource allocation</h2>
-                    <span class="panel__meta">next 24 h</span>
-                </div>
-                <div class="resource-stats-grid" id="resource-coverage"></div>
-                <div class="subhead">Deployment schedule</div>
-                <div id="deployment-missions" class="scroll-list">
-                    <div class="empty-note">Ranks boats, ambulances, kits and teams against the settlements the model
-                        expects to flood, by people exposed, depth and travel time from each hub.</div>
-                </div>
-                <div class="btn-row">
-                    <button id="btnStartOptimization" class="btn btn--primary" type="button" onclick="optimizeAllocation()">Plan deployment</button>
-                    <button id="btnStopOptimization" class="btn btn--danger" type="button" style="display:none;" onclick="stopOptimization()">Stop</button>
-                    <button id="btnDownloadDeploymentReport" class="btn btn--ghost" type="button" onclick="generateDeploymentReport()">Download plan</button>
-                </div>
-                <div id="deployment-phase-summary" class="phase-list"></div>
-                <div id="deployment-recommendations"></div>
             </section>
         </aside>
 
@@ -280,7 +260,7 @@
     <script src="js/flood-render.js?v=1.5"></script>
     <script src="js/flood-grid.js?v=1.9"></script>
     <script src="js/flood-routes.js?v=1.1"></script>
-    <script src="js/enhanced.js?v=4.5"></script>
+    <script src="js/enhanced.js?v=4.6"></script>
     <script src="js/ops-ui.js?v=1.7"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
