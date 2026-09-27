@@ -458,24 +458,22 @@
         const zx = Math.log2(availW / (Math.max(e - w, 1e-4) / 360 * 512));
         const zy = Math.log2(availH / (Math.max(my(s) - my(n), 1e-6) * 512));
         const zoom = Math.max(8, Math.min(14.5, Math.min(zx, zy) - 0.35));
-        map.flyTo({ center: [(w + e) / 2, (s + n) / 2], zoom, padding, duration: 1100, essential: true });
-        // With 3D terrain the camera settles on the ground surface, which moves
-        // high-ground routes off the planned spot. Measure where they actually
-        // are on screen and bring them into the free area.
+        const want = [(w + e) / 2, (s + n) / 2];
+        map.flyTo({ center: want, zoom, padding, duration: 1100, essential: true });
+        // With 3D terrain, MapLibre re-anchors the centre on the ground at the
+        // end of every animated move by reading back the terrain depth buffer.
+        // On a normal GPU that leaves the camera where it is; where the
+        // read-back is unreliable (seen on software rendering) it throws the
+        // camera kilometres off on high ground such as Meppadi. If the camera
+        // did not settle where planned, put it there with an instant jump,
+        // which does not re-anchor.
         const token = ++fitToken;
         map.once('moveend', () => {
             if (token !== fitToken || !current) return;
-            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-            current.routes.forEach(r => r.coords.forEach(c => {
-                const q = map.project(c);
-                x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
-            }));
-            const tx = padding.left + availW / 2, ty = padding.top + availH / 2;
-            const scale = Math.max((x1 - x0) / availW, (y1 - y0) / availH);
-            const dx = (x0 + x1) / 2 - tx, dy = (y0 + y1) / 2 - ty;
-            if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && scale <= 1) return;
-            map.panBy([dx, dy], { duration: 450 });
-            if (scale > 1) map.once('moveend', () => { if (token === fitToken) map.easeTo({ zoom: map.getZoom() - Math.log2(scale) - 0.15, around: map.unproject([tx, ty]), duration: 450 }); });
+            const c = map.getCenter();
+            const px = Math.pow(2, zoom) * 512 / 360;                          // pixels per degree of longitude
+            const off = Math.hypot((want[0] - c.lng) * px, (want[1] - c.lat) * px);
+            if (off > 25 || Math.abs(map.getZoom() - zoom) > 0.15) map.jumpTo({ center: want, zoom, padding });
         });
     }
 
