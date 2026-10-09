@@ -302,8 +302,11 @@ at least moderate at 0.4&nbsp;m, high at 1&nbsp;m and severe at 2&nbsp;m.</p>
 
 <section id="routes">
 <h2>9. Evacuation routes</h2>
-<p>Clicking the map in route mode plans up to three routes from that point
-(<code>js/flood-routes.js</code>). They only ever end at a safe place: a listed shelter, hospital,
+<p>The evacuation plan (<code>js/flood-routes.js</code>) routes every hexagon rated high or
+severe at the current model time. Each one starts from the 100&nbsp;m to 400&nbsp;m cell inside it
+where most residents are standing in water, preferring cells they can still wade out of, and ends
+at the nearest safe place. Clicking anywhere else on the map plans up to three alternatives from
+that point. Routes only ever end at a safe place: a listed shelter, hospital,
 high-ground point or rescue base that stays dry in the model to T+24&nbsp;h, or raised ground found
 by scanning the area in 1&nbsp;km (hills) or 3&nbsp;km (plains) blocks for the highest gentle cell
 that never floods. On the Bihar plain this picks out the embankment crests, where people do shelter
@@ -312,8 +315,14 @@ in real floods. Listed places that the model floods are left out, and the route 
 candidate. Walking speed follows Tobler's hiking function (Tobler 1993) for slope and slows in
 shallow water. Water deeper than 0.45&nbsp;m or fast water (depth &times; speed over 0.5&nbsp;m²/s)
 expected in the next two hours cannot be walked through; crossing a river on foot costs the time to
-find a bridge. If the start is already in deep water, or every way out on foot is cut, the route
-is planned for a rescue boat at 6&nbsp;km/h through deep slack water, then on foot. Paths are
+find a bridge. Walking is slowed to 60&nbsp;% of normal speed in high-risk cells and 40&nbsp;% in
+severe ones, so a route leaves the worst ground by the shortest way and goes round other danger
+cells when a detour costs little. For the plan, the search runs once backwards from all safe places
+together, which gives every cell its quickest way out in a fraction of a second; the plan is
+recomputed whenever the timeline stops. If the start is already in deep water, or every way out on foot is cut, the route
+is planned for a rescue boat at 6&nbsp;km/h through deep slack water, then on foot. Cells
+surrounded by fast water that a boat cannot work in are marked cut off, for airlift or sheltering
+in place. Paths are
 straightened where the straight line is no worse and rounded by corner cutting (Chaikin 1974).</p>
 </section>
 
@@ -405,6 +414,7 @@ thread in Node.js; in the browser the run happens in a Web Worker while playback
 <table class="tbl tbl--history">
   <thead><tr><th>Version</th><th>Date</th><th>Changes</th></tr></thead>
   <tbody>
+    <tr><td>0.10</td><td>9 Oct 2026</td><td>Evacuation plan for every high and severe cell, with slower walking through risk zones; boat and cut-off cells flagged.</td></tr>
     <tr><td>0.9</td><td>27 Sep 2026</td><td>Meppadi storm raised to 400&nbsp;mm; saturated soils and rough mountain streams. Evacuation routes planned on the model. Flow arrows; map and figures use one 0.10&nbsp;m threshold.</td></tr>
     <tr><td>0.8</td><td>26 Sep 2026</td><td>Steady 24&nbsp;h storm from T+0. Floodwater measured above the T+0 level. Darbhanga river corridors rated by river rise. Water accumulated readout.</td></tr>
     <tr><td>0.7</td><td>26 Sep 2026</td><td>Terrain-aware runoff and water rendering; 3D terrain view; GIS profile for each hexagon.</td></tr>

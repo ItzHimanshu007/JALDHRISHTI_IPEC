@@ -9,7 +9,7 @@
     <link href='https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css' rel='stylesheet' />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/ops.css?v=2.0">
+    <link rel="stylesheet" href="css/ops.css?v=2.1">
 </head>
 
 <body>
@@ -122,7 +122,7 @@
                 </button>
                 <div class="btn-row">
                     <button id="btnResetView" class="btn" type="button">Reset view</button>
-                    <button id="btnFindRescue" class="btn" type="button" onclick="toggleRescueMode()">Plan evacuation route</button>
+                    <button id="btnFindRescue" class="btn" type="button" onclick="toggleRescueMode()" title="Routes out of every high and severe risk cell to the nearest safe place">Evacuation plan</button>
                 </div>
             </section>
 
@@ -251,8 +251,8 @@
     <script src="js/flood-sim.js?v=1.8"></script>
     <script src="js/flood-render.js?v=1.5"></script>
     <script src="js/flood-grid.js?v=1.9"></script>
-    <script src="js/flood-routes.js?v=1.1"></script>
-    <script src="js/enhanced.js?v=4.6"></script>
+    <script src="js/flood-routes.js?v=2.1"></script>
+    <script src="js/enhanced.js?v=4.7"></script>
     <script src="js/ops-ui.js?v=1.8"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
