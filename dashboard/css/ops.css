@@ -292,6 +292,12 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 0; bord
 .evac-row__time { font-size: 12.5px; text-align: right; display: flex; flex-direction: column; white-space: nowrap; }
 .evac-row__time small { font-size: 10.5px; color: var(--muted); }
 .evac-facts { margin-bottom: 8px; }
+.evac-list--zones { max-height: 236px; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.evac-zone { grid-template-columns: 12px 1fr auto; }
+.evac-risk { width: 10px; height: 10px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+.evac-detail { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+.evac-detail__title { font-size: 12px; color: var(--text); margin-bottom: 6px; }
+.evac-head-actions { display: flex; gap: 6px; }
 .evac-facts dd { text-align: right; }
 .evac-warn { margin: 0 0 6px; padding: 6px 8px; font-size: 11.5px; color: #f0d58a; background: rgba(216, 182, 56, 0.08); border-left: 2px solid var(--yellow); border-radius: 2px; }
 .evac-note { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.45; }

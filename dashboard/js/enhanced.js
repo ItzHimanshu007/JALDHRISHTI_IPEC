@@ -1460,17 +1460,16 @@ function toggleRescueMode() {
             }
         });
         if (btnNavbar) btnNavbar.textContent = 'Rescue mode on';
-        if (btnLayer) btnLayer.textContent = 'Click the map to set a start point';
+        if (btnLayer) btnLayer.textContent = 'Close evacuation plan';
 
         // Change cursor
         if (appState.map) {
             appState.map.getCanvas().style.cursor = 'crosshair';
         }
 
-        showToast('Evacuation routes', 'Click the map where people are. Routes go to the nearest places the model keeps dry.', 'info');
-
-        // Add map click handler
+        // Add map click handler, then plan routes out of every high-risk cell
         appState.map.on('click', handleRescueClick);
+        if (window.FloodRoutes) FloodRoutes.startPlan();
     } else {
         // Deactivate both buttons
         [btnNavbar, btnLayer].forEach(btn => {
@@ -1481,7 +1480,7 @@ function toggleRescueMode() {
             }
         });
         if (btnNavbar) btnNavbar.textContent = 'Rescue me';
-        if (btnLayer) btnLayer.textContent = 'Plan evacuation route';
+        if (btnLayer) btnLayer.textContent = 'Evacuation plan';
 
         if (appState.map) {
             appState.map.getCanvas().style.cursor = '';
@@ -1545,7 +1544,8 @@ function handleRescueClick(e) {
     if (!appState.rescueMode || !window.FloodRoutes) return;
     // clicks on a route marker or an alternative route select it instead
     if (e.originalEvent && e.originalEvent.target.closest && e.originalEvent.target.closest('.evac-pin')) return;
-    if (appState.map.getLayer('evac-alt-line') && appState.map.queryRenderedFeatures(e.point, { layers: ['evac-alt-line', 'evac-alt-casing'] }).length) return;
+    const own = ['evac-alt-line', 'evac-alt-casing', 'evac-plan-origin'].filter(id => appState.map.getLayer(id));
+    if (own.length && appState.map.queryRenderedFeatures(e.point, { layers: own }).length) return;
 
     const { lng, lat } = e.lngLat;
     const result = FloodRoutes.plan(lng, lat);
