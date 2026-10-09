@@ -25,6 +25,7 @@ sparkline.
 | `dashboard/js/flood-sim.js` | Runtime: worker, frames, scenario clock, exposure / facility / gauge stats, event detection, alert level, `riskAt()` for point risk queries. |
 | `dashboard/js/flood-render.js` | Water surface draped on the 3D terrain (floodwater above the T+0 level from 0.10 m, rivers at full depth; depth + sediment colour, flow-advected ripples, white water), flow arrows (symbol layer on a zoom-dependent lattice) and streaks, unstable-slope hatch, rain overlay, map pins. |
 | `dashboard/js/flood-grid.js` | Hexagonal risk grid (~220 hexagons per area, IDs like `DBG-F12`, A = northernmost row; green = safe, yellow = moderate, red = high, dark red = severe, judged relative to each hexagon's area and residents): water accumulated, mean/max depth, % flooded, residents, terrain / GIS data (elevation, slope, height above river, nearest river), risk class and index; in Darbhanga, hexagons the rivers run through are rated by how far the river has risen (≥ 1 m high, ≥ 2 m severe). Hover card on the map; full readout on click; ranked list in the Grid cells tab. |
+| `dashboard/js/flood-routes.js` | Evacuation plan: every high or severe hexagon is routed from where most of its people stand in water to the nearest place the model keeps dry to T+24 h (listed facilities, raised ground, embankment crests). One reverse Dijkstra from all safe places; Tobler walking speed, slowed by wading and to 60 % / 40 % in high / severe cells; water over 0.45 m or depth × speed over 0.5 m²/s in the next 2 h is impassable on foot; boat at 6 km/h where needed; cells with no way out are flagged cut off. Recomputed when the timeline stops. Clicking elsewhere gives up to three point-to-point alternatives. |
 | `dashboard/js/ops-ui.js` | Panels: KPIs, gauge chart, timeline, event log, settlements / facilities, point readout, layer switches. |
 
 ## Scenarios
@@ -74,4 +75,4 @@ worker, and frames stream in so playback starts immediately.
 
 ## Controls
 
-Space: play/pause · ←/→: ±30 min · H: hide panels · click the map for a point readout.
+Space: play/pause · ←/→: ±30 min · H: hide panels · click the map for a point readout · Evacuation plan (Map layers panel): click a cell in the list or on the map to follow its route.

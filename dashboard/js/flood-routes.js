@@ -548,7 +548,7 @@
         selZone = k;
         if (view !== 'plan') backToPlan(); else { renderPlan(); renderPanel(); }
         const z = planData.zones[k];
-        fitCoords(z.coords ? [z.coords] : [[z.startLL, z.startLL]], closeZoom());
+        fitCoords(z.coords ? [z.coords] : [[z.startLL, z.startLL]], z.coords ? closeZoom() : closeZoom() - 1.5);
     }
 
     function backToPlan() {
